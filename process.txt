@@ -1,0 +1,94 @@
+DIME WEB — PROCESS LOG
+======================
+Project started: 2026-04-05
+Author: Abhi Kumbhani
+
+================================================================================
+REPOS
+================================================================================
+dime-api/  →  Fastify 5 REST API           http://localhost:4000
+dime-web/  →  Next.js 15 PWA               http://localhost:3000
+
+Both repos live as siblings under:
+  /Users/akumbhani007/Documents/My Stuff/
+
+================================================================================
+WORKFLOW
+================================================================================
+1. Feature planning is captured in PROGRESS.md (14 features, each with description,
+   implementation notes, and a validation checklist).
+
+2. Work is sequenced per the TDD dependency graph:
+     Backend:  B1 → B2 → B3 → B4 → B5 → B6 → B7 → B8
+     Frontend: F1 → F2 → F3 → F4 → F5 → F6 → F7 → F8 → F9 → F10 → F11
+   B7 (Ledger backend) can run in parallel after B2.
+   F1 (frontend setup) can run in parallel with B1.
+
+3. Each phase lives on its own branch:
+     feature/B1-setup
+     feature/B2-auth
+     feature/F1-setup
+     feature/F2-auth-ui
+     ... etc.
+
+4. Branch is merged into `dev` after validation checklist in PROGRESS.md is fully
+   checked off.
+
+5. `main` branch is always production-ready (merged from dev after smoke test).
+
+6. Claude Code assists with implementation; every significant decision or deviation
+   from the TDD is logged in the DECISIONS LOG below.
+
+================================================================================
+CURRENT PHASE
+================================================================================
+[2026-04-05]  Foundation — repos initialized, starter code, env setup
+
+================================================================================
+DECISIONS LOG
+================================================================================
+[2026-04-05]  Next.js version: Using latest stable (15.x). TDD referenced 16.2
+              which does not exist yet. Will upgrade when available.
+
+[2026-04-05]  Node.js: Not pre-installed on machine. Installing Node 22 LTS
+              via nvm (managed via Homebrew).
+
+[2026-04-05]  PostgreSQL: Not pre-installed. Installing PostgreSQL 17 via
+              Homebrew. No Docker available on this machine.
+
+[2026-04-05]  Font: Using Geist (geist npm package by Vercel). Matches the
+              Claude Code / claude.ai aesthetic. Applied via next/font.
+
+[2026-04-05]  Repo structure: Two separate git repos (not a monorepo), exactly
+              as specified in the TDD. dime-api/ and dime-web/ are siblings.
+
+[2026-04-05]  Auth: JWT (access token in Zustand memory, refresh token in
+              localStorage). Google OAuth supported via token exchange on backend.
+              No NextAuth/Auth.js — the backend is a separate Fastify server,
+              not a Next.js API route.
+
+================================================================================
+PHASE COMPLETION LOG
+================================================================================
+(fill in dates as phases complete)
+
+[ ] B1  — Backend: Project setup & base infrastructure
+[ ] B2  — Backend: Auth module (register, login, refresh, me)
+[ ] B3  — Backend: Categories module
+[ ] B4  — Backend: Transactions module
+[ ] B5  — Backend: Budgets module
+[ ] B6  — Backend: Analytics module
+[ ] B7  — Backend: Ledger module
+[ ] B8  — Backend: CSV module
+
+[ ] F1  — Frontend: Project setup & design system
+[ ] F2  — Frontend: Auth UI (login, signup, token management)
+[ ] F3  — Frontend: App shell & navigation
+[ ] F4  — Frontend: Categories management
+[ ] F5  — Frontend: Transaction log
+[ ] F6  — Frontend: Budgets
+[ ] F7  — Frontend: Insights core charts
+[ ] F8  — Frontend: Insights advanced analytics
+[ ] F9  — Frontend: Ledger (people + entries)
+[ ] F10 — Frontend: Settings (account + CSV)
+[ ] F11 — Frontend: PWA & polish

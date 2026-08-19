@@ -470,8 +470,8 @@ describe('TransactionList infinite scroll', () => {
   it('calls fetchNextPage when the sentinel becomes visible', async () => {
     const { Wrapper } = buildWrapper()
     // First page returns a non-null nextCursor so hasNextPage === true
-    vi.mocked(txApi.listTransactions).mockImplementation(async ({ cursor }) => {
-      if (!cursor) {
+    vi.mocked(txApi.listTransactions).mockImplementation(async (params) => {
+      if (!params?.cursor) {
         return {
           items: [mkTx({ id: 'p1-a', note: 'Page1 A' })],
           nextCursor: 'cursor-2',

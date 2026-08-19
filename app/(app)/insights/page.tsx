@@ -1,8 +1,10 @@
+'use client'
+
 export default function InsightsPage() {
   return (
-    <main className="flex flex-1 flex-col items-center justify-center p-6">
-      <h1 className="text-2xl font-semibold">Insights</h1>
-      <p className="mt-2 text-[var(--muted-foreground)]">Coming soon — F08 Insights</p>
-    </main>
+    <div className="flex flex-1 flex-col items-center justify-center p-6 min-h-[60vh]">
+      <h1 className="text-3xl font-bold text-[var(--foreground)]">Insights</h1>
+      <p className="mt-2 text-[var(--muted-foreground)]">Spending insights coming soon</p>
+    </div>
   )
 }

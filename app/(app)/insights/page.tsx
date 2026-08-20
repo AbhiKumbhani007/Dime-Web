@@ -115,7 +115,7 @@ export default function InsightsPage() {
 
       {/* Category filter */}
       {categories.length > 0 && (
-        <div className="w-full min-w-0 overflow-x-auto no-scrollbar pb-1">
+        <div className="w-full min-w-0 overflow-x-auto scrollbar-hide pb-1">
           <div role="radiogroup" aria-label="Filter by category" className="flex w-max gap-1.5">
             <button
               type="button"

@@ -27,7 +27,7 @@ export function FilterBar() {
       : 'Date range'
 
   return (
-    <div className="w-full overflow-x-auto no-scrollbar">
+    <div className="w-full overflow-x-auto scrollbar-hide">
       <div className="flex items-center gap-2 px-4 py-2 w-max">
         {/* Income/expense segmented toggle */}
         <div

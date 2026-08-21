@@ -14,6 +14,7 @@ interface AuthState {
   setAuth: (user: AuthUser, accessToken: string) => void
   setAccessToken: (token: string) => void
   clearAuth: () => void
+  updateUser: (patch: Partial<AuthUser>) => void
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -27,6 +28,9 @@ export const useAuthStore = create<AuthState>()(
       setAccessToken: (accessToken) => set({ accessToken }),
 
       clearAuth: () => set({ user: null, accessToken: null }),
+
+      updateUser: (patch) =>
+        set((s) => ({ user: s.user ? { ...s.user, ...patch } : s.user })),
     }),
     {
       name: 'dime-auth',

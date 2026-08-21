@@ -43,10 +43,12 @@ async function refreshAccessToken(): Promise<string | null> {
         json: { refreshToken },
         throwHttpErrors: false,
       })
-      .json<{ data: { accessToken: string } }>()
+      .json<{ accessToken: string; refreshToken: string }>()
 
-    const newToken = res.data.accessToken
+    const newToken = res.accessToken
     _setToken(newToken)
+    // Rotate the stored refresh token
+    localStorage.setItem('dime-refresh-token', res.refreshToken)
     return newToken
   } catch {
     _clearAuth()

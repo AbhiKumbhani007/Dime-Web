@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import './globals.css'
+import { Toaster } from 'sonner'
 import { ThemeProvider } from '@/components/providers/ThemeProvider'
 import { QueryProvider } from '@/components/providers/QueryProvider'
 
@@ -48,6 +49,7 @@ export default function RootLayout({
       <body className="h-full bg-[var(--background)] text-[var(--foreground)] antialiased">
         <ThemeProvider>
           <QueryProvider>{children}</QueryProvider>
+          <Toaster richColors position="top-center" />
         </ThemeProvider>
       </body>
     </html>

@@ -2,46 +2,47 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { ReceiptText, BarChart3, Target, Users, Settings } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { NAV_ITEMS, isNavItemActive } from '@/lib/nav'
 
-const navItems = [
-  { href: '/log', label: 'Log', icon: ReceiptText },
-  { href: '/insights', label: 'Insights', icon: BarChart3 },
-  { href: '/budgets', label: 'Budgets', icon: Target },
-  { href: '/ledger', label: 'Ledger', icon: Users },
-  { href: '/settings', label: 'Settings', icon: Settings },
-]
-
+/**
+ * Mobile navigation, below `md`. The active state is a pill around the icon
+ * only — not the whole item — so the labels stay on a common baseline.
+ */
 export function BottomNav() {
   const pathname = usePathname()
 
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 z-50 h-16 pb-safe bg-[var(--card)] border-t border-[var(--border)] lg:hidden"
       aria-label="Bottom navigation"
+      className="pb-safe fixed inset-x-0 bottom-0 z-50 flex h-[66px] shrink-0 items-stretch border-t border-border bg-card md:hidden"
     >
-      <div className="flex h-full items-center justify-around px-2">
-        {navItems.map(({ href, label, icon: Icon }) => {
-          const isActive = pathname === href || pathname.startsWith(href + '/')
-          return (
-            <Link
-              key={href}
-              href={href}
+      {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
+        const active = isNavItemActive(pathname, href)
+        return (
+          <Link
+            key={href}
+            href={href}
+            aria-current={active ? 'page' : undefined}
+            className={cn(
+              'flex min-w-0 flex-1 flex-col items-center justify-center gap-1 pt-1.5',
+              active ? 'text-accent' : 'text-muted-foreground',
+            )}
+          >
+            <span
               className={cn(
-                'flex flex-col items-center justify-center gap-0.5 rounded-xl px-3 py-1.5 min-w-[56px] transition-colors',
-                isActive
-                  ? 'bg-[var(--accent)]/10 text-[var(--accent)]'
-                  : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]'
+                'flex h-[26px] w-11 items-center justify-center rounded-full transition-colors',
+                active && 'bg-[color-mix(in_srgb,var(--accent)_14%,transparent)]',
               )}
-              aria-current={isActive ? 'page' : undefined}
             >
-              <Icon className="h-5 w-5" />
-              <span className="text-[10px] font-medium leading-none">{label}</span>
-            </Link>
-          )
-        })}
-      </div>
+              <Icon className="h-[18px] w-[18px]" />
+            </span>
+            <span className={cn('text-[10px] leading-none', active ? 'font-semibold' : 'font-medium')}>
+              {label}
+            </span>
+          </Link>
+        )
+      })}
     </nav>
   )
 }

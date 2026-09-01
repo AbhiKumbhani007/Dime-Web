@@ -71,7 +71,7 @@ import type { Transaction } from '@/lib/api/transactions'
 import * as txApi from '@/lib/api/transactions'
 import { TransactionForm } from '@/components/transactions/TransactionForm'
 import { FilterBar } from '@/components/transactions/FilterBar'
-import { AddTransactionFAB } from '@/components/transactions/AddTransactionFAB'
+import { Fab } from '@/components/layout/Fab'
 import { TransactionList } from '@/components/transactions/TransactionList'
 import { SearchBar } from '@/components/transactions/SearchBar'
 import {
@@ -438,29 +438,26 @@ describe('FilterBar', () => {
 })
 
 // ═══════════════════════════════════════════════════════════════════════════
-//   AddTransactionFAB
+//   Fab
 // ═══════════════════════════════════════════════════════════════════════════
-describe('AddTransactionFAB', () => {
-  it('renders a visible button by default', () => {
-    render(<AddTransactionFAB onClick={() => {}} />)
+describe('Fab', () => {
+  it('renders a labelled button', () => {
+    render(<Fab onClick={() => {}} label="Add transaction" />)
     expect(screen.getByRole('button', { name: 'Add transaction' })).toBeInTheDocument()
   })
 
   it('fires onClick when clicked', () => {
     const onClick = vi.fn()
-    render(<AddTransactionFAB onClick={onClick} />)
+    render(<Fab onClick={onClick} label="Add transaction" />)
     fireEvent.click(screen.getByRole('button', { name: 'Add transaction' }))
     expect(onClick).toHaveBeenCalledTimes(1)
   })
 
-  // NOTE: Scroll-based hide/show is skipped intentionally.
-  // AddTransactionFAB depends on framer-motion's `useScroll` + `useMotionValueEvent`,
-  // which observes window scroll via requestAnimationFrame, and on a `<main>`
-  // element's scrollTop. In jsdom, neither `scrollY` nor `scrollTop` genuinely
-  // changes on synthetic `scroll` events (layout is not computed), and
-  // useMotionValueEvent callbacks do not reliably fire. Rather than testing
-  // internal framer-motion state, we document the behavior here and rely on
-  // e2e/visual tests for this interaction.
+  // The FAB is mobile-only (`md:hidden`) and is rendered by PageLayout from
+  // whatever the current page publishes via usePageChrome — from `md` up the
+  // same action becomes a labelled button in the top bar. Which of the two is
+  // visible is a CSS breakpoint decision, so it is covered by the tablet and
+  // desktop Playwright projects rather than here.
 })
 
 // ═══════════════════════════════════════════════════════════════════════════

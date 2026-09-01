@@ -1,26 +1,34 @@
 'use client'
 
-import { useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { SearchBar } from '@/components/transactions/SearchBar'
 import { FilterBar } from '@/components/transactions/FilterBar'
 import { TransactionList } from '@/components/transactions/TransactionList'
-import { AddTransactionFAB } from '@/components/transactions/AddTransactionFAB'
 import { TransactionForm } from '@/components/transactions/TransactionForm'
+import { usePageChrome } from '@/components/layout/PageChrome'
 import type { Transaction } from '@/lib/api/transactions'
 
 export default function LogPage() {
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<Transaction | undefined>(undefined)
 
-  function handleAdd() {
+  const handleAdd = useCallback(() => {
     setEditing(undefined)
     setFormOpen(true)
-  }
+  }, [])
 
   function handleEdit(tx: Transaction) {
     setEditing(tx)
     setFormOpen(true)
   }
+
+  // One declaration drives the top-bar button (md+), the FAB (mobile) and `n`.
+  usePageChrome(
+    useMemo(
+      () => ({ primaryAction: { label: 'Add transaction', onClick: handleAdd } }),
+      [handleAdd],
+    ),
+  )
 
   return (
     <div className="flex flex-col min-h-full">
@@ -30,8 +38,6 @@ export default function LogPage() {
       </div>
 
       <TransactionList onEdit={handleEdit} />
-
-      <AddTransactionFAB onClick={handleAdd} />
 
       <TransactionForm
         open={formOpen}

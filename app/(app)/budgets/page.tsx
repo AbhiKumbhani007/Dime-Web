@@ -1,15 +1,15 @@
 'use client'
 
-import { useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { PiggyBank } from 'lucide-react'
 
-import { Fab } from '@/components/layout/Fab'
 import { BudgetCard } from '@/components/budgets/BudgetCard'
 import { BudgetCardSkeleton } from '@/components/budgets/BudgetCardSkeleton'
 import { BudgetDonutSummary } from '@/components/budgets/BudgetDonutSummary'
 import { BudgetForm } from '@/components/budgets/BudgetForm'
 import { DeleteBudgetDialog } from '@/components/budgets/DeleteBudgetDialog'
 import { useBudgets } from '@/hooks/useBudgets'
+import { usePageChrome } from '@/components/layout/PageChrome'
 import type { BudgetWithProgress } from '@/lib/api/budgets'
 
 export default function BudgetsPage() {
@@ -22,10 +22,15 @@ export default function BudgetsPage() {
 
   const budgets = data?.budgets ?? []
 
-  function handleAdd() {
+  const handleAdd = useCallback(() => {
     setEditing(undefined)
     setFormOpen(true)
-  }
+  }, [])
+
+  // One declaration drives the top-bar button (md+), the FAB (mobile) and `n`.
+  usePageChrome(
+    useMemo(() => ({ primaryAction: { label: 'Add budget', onClick: handleAdd } }), [handleAdd]),
+  )
 
   function handleEdit(budget: BudgetWithProgress) {
     setEditing(budget)
@@ -79,7 +84,6 @@ export default function BudgetsPage() {
         </>
       )}
 
-      <Fab onClick={handleAdd} label="Add budget" />
 
       <BudgetForm open={formOpen} onOpenChange={setFormOpen} budget={editing} />
       <DeleteBudgetDialog budget={deleting} open={deleteOpen} onOpenChange={setDeleteOpen} />

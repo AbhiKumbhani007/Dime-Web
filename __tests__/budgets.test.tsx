@@ -82,6 +82,11 @@ import { BudgetForm } from '@/components/budgets/BudgetForm'
 import { BudgetDonutSummary } from '@/components/budgets/BudgetDonutSummary'
 import { DeleteBudgetDialog } from '@/components/budgets/DeleteBudgetDialog'
 import BudgetsPage from '@/app/(app)/budgets/page'
+import {
+  PageChromeProvider,
+  usePageChromeValue,
+  type PageChrome,
+} from '@/components/layout/PageChrome'
 import { budgetHealth, clampPercent } from '@/lib/utils/budgetProgress'
 import type { BudgetWithProgress } from '@/lib/api/budgets'
 
@@ -541,11 +546,28 @@ describe('BudgetsPage', () => {
     expect(screen.getByText(/Could not load budgets/)).toBeInTheDocument()
   })
 
-  it('opens the form from the FAB', async () => {
-    const user = userEvent.setup()
-    render(<BudgetsPage />)
+  // The create button is no longer rendered by the page. It publishes a
+  // primary action via usePageChrome, and the shell decides whether that
+  // surfaces as a top-bar button (md+) or a FAB (mobile). Assert the contract
+  // the page is actually responsible for: that invoking the published action
+  // opens the form.
+  it('publishes a primary action that opens the form', async () => {
+    let chrome: PageChrome = {}
+    function ChromeProbe() {
+      chrome = usePageChromeValue()
+      return null
+    }
 
-    await user.click(screen.getByRole('button', { name: 'Add budget' }))
+    render(
+      <PageChromeProvider>
+        <BudgetsPage />
+        <ChromeProbe />
+      </PageChromeProvider>,
+    )
+
+    await waitFor(() => expect(chrome.primaryAction?.label).toBe('Add budget'))
+
+    act(() => chrome.primaryAction!.onClick())
 
     expect(await screen.findByText('New Budget')).toBeInTheDocument()
   })

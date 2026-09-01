@@ -9,6 +9,12 @@ import type { BudgetWithProgress } from '@/lib/api/budgets'
 const SPENT_COLOUR = 'var(--accent)'
 const REMAINING_COLOUR = 'var(--muted)'
 
+const BANDS = [
+  { label: 'Under 75%', health: 'safe', colour: 'var(--income)' },
+  { label: '75 – 90%', health: 'warning', colour: 'var(--warning-fill)' },
+  { label: 'Over 90%', health: 'danger', colour: 'var(--expense)' },
+] as const
+
 interface BudgetDonutSummaryProps {
   budgets: BudgetWithProgress[]
 }
@@ -20,6 +26,14 @@ export function BudgetDonutSummary({ budgets }: BudgetDonutSummaryProps) {
   const remaining = Math.max(totalLimit - totalSpent, 0)
   const percent = totalLimit > 0 ? Math.round((totalSpent / totalLimit) * 100) : 0
 
+  const counts = budgets.reduce(
+    (acc, b) => {
+      acc[budgetHealth(b.percent)]++
+      return acc
+    },
+    { safe: 0, warning: 0, danger: 0 },
+  )
+
   // Recharts renders nothing for an all-zero dataset, so fall back to a single
   // full "remaining" slice to keep the ring visible on a fresh account.
   const data =
@@ -30,18 +44,28 @@ export function BudgetDonutSummary({ budgets }: BudgetDonutSummaryProps) {
           { name: 'Remaining', value: remaining },
         ]
 
+  const totals = [
+    { label: 'Spent', value: formatINR(totalSpent), sub: `across ${budgets.length}` },
+    { label: 'Budgeted', value: formatINR(totalLimit), sub: 'this period' },
+    {
+      label: 'Remaining',
+      value: formatINR(totalLimit - totalSpent),
+      sub: totalLimit - totalSpent < 0 ? 'overspent' : 'left to spend',
+    },
+  ]
+
   return (
     <div
       data-testid="budget-donut-summary"
-      className="flex items-center gap-4 rounded-2xl border border-[var(--border)] bg-[var(--card)] p-4"
+      className="flex flex-wrap items-center gap-6 rounded-2xl border border-border bg-card p-(--pad-card)"
     >
-      <div className="relative h-28 w-28 shrink-0">
+      <div className="relative h-[126px] w-[126px] shrink-0">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie
               data={data}
               dataKey="value"
-              innerRadius="70%"
+              innerRadius="74%"
               outerRadius="100%"
               startAngle={90}
               endAngle={-270}
@@ -58,27 +82,43 @@ export function BudgetDonutSummary({ budgets }: BudgetDonutSummaryProps) {
           </PieChart>
         </ResponsiveContainer>
         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-          <span className={`text-lg font-bold ${HEALTH_TEXT_CLASS[budgetHealth(percent)]}`}>
+          <span
+            className={`font-mono text-2xl font-bold tracking-[-0.03em] ${HEALTH_TEXT_CLASS[budgetHealth(percent)]}`}
+          >
             {percent}%
           </span>
-          <span className="text-[10px] text-[var(--muted-foreground)]">used</span>
+          <span className="text-[10.5px] text-muted-foreground">used</span>
         </div>
       </div>
 
-      <dl className="min-w-0 flex-1 space-y-1.5 text-sm">
-        <div className="flex items-baseline justify-between gap-2">
-          <dt className="text-[var(--muted-foreground)]">Spent</dt>
-          <dd className="font-semibold">{formatINR(totalSpent)}</dd>
-        </div>
-        <div className="flex items-baseline justify-between gap-2">
-          <dt className="text-[var(--muted-foreground)]">Budgeted</dt>
-          <dd className="font-semibold">{formatINR(totalLimit)}</dd>
-        </div>
-        <div className="flex items-baseline justify-between gap-2 border-t border-[var(--border)] pt-1.5">
-          <dt className="text-[var(--muted-foreground)]">Remaining</dt>
-          <dd className="font-semibold">{formatINR(totalLimit - totalSpent)}</dd>
-        </div>
+      <dl className="grid min-w-[300px] flex-1 grid-cols-3 gap-5">
+        {totals.map(({ label, value, sub }) => (
+          <div key={label} className="flex flex-col gap-1">
+            <dt className="text-[11px] font-medium text-muted-foreground">{label}</dt>
+            <dd className="font-mono text-xl font-bold tracking-[-0.025em]">{value}</dd>
+            <span className="text-[10.5px] text-muted-foreground">{sub}</span>
+          </div>
+        ))}
       </dl>
+
+      <div className="flex min-w-[168px] shrink-0 flex-col gap-[7px]">
+        <h3 className="font-mono text-[10px] font-semibold tracking-[0.09em] text-muted-foreground">
+          HEALTH
+        </h3>
+        {BANDS.map(({ label, health, colour }) => (
+          <div key={label} className="flex items-center gap-2">
+            <span
+              aria-hidden
+              className="h-[9px] w-[9px] shrink-0 rounded-[3px]"
+              style={{ background: colour }}
+            />
+            <span className="min-w-0 flex-1 text-[11.5px] text-muted-foreground">{label}</span>
+            <span className="shrink-0 font-mono text-[11.5px] font-semibold">
+              {counts[health]}
+            </span>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

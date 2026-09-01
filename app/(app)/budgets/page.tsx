@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useMemo, useState } from 'react'
-import { PiggyBank } from 'lucide-react'
+import { PiggyBank, Plus } from 'lucide-react'
 
 import { BudgetCard } from '@/components/budgets/BudgetCard'
 import { BudgetCardSkeleton } from '@/components/budgets/BudgetCardSkeleton'
@@ -43,26 +43,26 @@ export default function BudgetsPage() {
   }
 
   return (
-    <div className="flex min-h-full flex-col gap-4 p-4 pb-24">
+    <div className="flex min-h-full min-w-0 flex-col gap-(--gap) p-(--pad-page)">
       {isLoading && (
-        <>
+        <div className="grid gap-(--gap) md:grid-cols-2 lg:grid-cols-3">
           <BudgetCardSkeleton />
           <BudgetCardSkeleton />
           <BudgetCardSkeleton />
-        </>
+        </div>
       )}
 
       {isError && (
-        <p className="py-10 text-center text-sm text-[var(--destructive)]">
+        <p className="py-10 text-center text-sm text-destructive">
           Could not load budgets. Pull down to retry.
         </p>
       )}
 
       {!isLoading && !isError && budgets.length === 0 && (
         <div className="flex flex-1 flex-col items-center justify-center gap-2 py-20 text-center">
-          <PiggyBank className="h-12 w-12 text-[var(--muted-foreground)]" aria-hidden="true" />
+          <PiggyBank className="h-12 w-12 text-muted-foreground" aria-hidden="true" />
           <h2 className="text-lg font-semibold">No budgets yet</h2>
-          <p className="max-w-xs text-sm text-[var(--muted-foreground)]">
+          <p className="max-w-xs text-sm text-muted-foreground">
             Set a spending limit on a category and track it against what you actually spend.
           </p>
         </div>
@@ -71,7 +71,7 @@ export default function BudgetsPage() {
       {!isLoading && !isError && budgets.length > 0 && (
         <>
           <BudgetDonutSummary budgets={budgets} />
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid min-w-0 gap-(--gap) md:grid-cols-2 lg:grid-cols-3">
             {budgets.map((budget) => (
               <BudgetCard
                 key={budget.id}
@@ -80,6 +80,18 @@ export default function BudgetsPage() {
                 onDelete={handleDelete}
               />
             ))}
+
+            {/* The design closes the grid with a dashed tile rather than
+                relying on the top-bar button alone, so the affordance sits
+                where the eye already is after scanning the cards. */}
+            <button
+              type="button"
+              onClick={handleAdd}
+              className="flex min-h-[168px] cursor-pointer flex-col items-center justify-center gap-2.5 rounded-2xl border-[1.5px] border-dashed border-border text-muted-foreground transition-colors hover:border-accent hover:text-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            >
+              <Plus aria-hidden className="h-6 w-6" />
+              <span className="text-[13px] font-medium">New budget</span>
+            </button>
           </div>
         </>
       )}

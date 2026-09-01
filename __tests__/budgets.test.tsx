@@ -255,66 +255,39 @@ describe('BudgetCard', () => {
     expect(bar).toHaveAttribute('aria-valuemax', '100')
   })
 
-  it('opens the menu and fires onEdit', async () => {
+  // The kebab menu and its 500ms long-press are gone. The design puts edit and
+  // delete directly on the card, always visible — a hover-revealed or
+  // long-pressed control is a poor primary action on a touch device, and this
+  // removes a hidden interaction nothing signposted.
+  it('fires onEdit from the edit button', async () => {
     const onEdit = vi.fn()
     const user = userEvent.setup()
     render(<BudgetCard budget={makeBudget()} onEdit={onEdit} onDelete={noop} />)
 
-    await user.click(screen.getByRole('button', { name: /Options for Groceries/ }))
-    await user.click(await screen.findByText('Edit'))
+    await user.click(screen.getByRole('button', { name: 'Edit Groceries' }))
 
     expect(onEdit).toHaveBeenCalledWith(expect.objectContaining({ id: 'budget-1' }))
   })
 
-  it('opens the menu and fires onDelete', async () => {
+  it('fires onDelete from the delete button', async () => {
     const onDelete = vi.fn()
     const user = userEvent.setup()
     render(<BudgetCard budget={makeBudget()} onEdit={noop} onDelete={onDelete} />)
 
-    await user.click(screen.getByRole('button', { name: /Options for Groceries/ }))
-    await user.click(await screen.findByText('Delete'))
+    await user.click(screen.getByRole('button', { name: 'Delete Groceries' }))
 
     expect(onDelete).toHaveBeenCalledWith(expect.objectContaining({ id: 'budget-1' }))
   })
 
-  it('opens the menu after a 500ms long-press', () => {
-    vi.useFakeTimers()
-    try {
-      render(<BudgetCard budget={makeBudget()} onEdit={noop} onDelete={noop} />)
+  it('marks where spending should be by now', () => {
+    // periodStart/periodEnd in the fixture put the budget mid-period, so the
+    // pace marker should sit somewhere inside the bar rather than at an edge.
+    render(<BudgetCard budget={makeBudget()} onEdit={noop} onDelete={noop} />)
 
-      fireEvent.pointerDown(screen.getByTestId('budget-card'))
-      act(() => {
-        vi.advanceTimersByTime(600)
-      })
-
-      // Radix hides the trigger from the a11y tree while the menu is open, so
-      // assert on the menu itself rather than the trigger's aria-expanded.
-      expect(screen.getByRole('menu')).toBeInTheDocument()
-      expect(screen.getByText('Edit')).toBeInTheDocument()
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('does not open the menu when the press is released early', () => {
-    vi.useFakeTimers()
-    try {
-      render(<BudgetCard budget={makeBudget()} onEdit={noop} onDelete={noop} />)
-
-      const card = screen.getByTestId('budget-card')
-      fireEvent.pointerDown(card)
-      act(() => {
-        vi.advanceTimersByTime(200)
-      })
-      fireEvent.pointerUp(card)
-      act(() => {
-        vi.advanceTimersByTime(600)
-      })
-
-      expect(screen.queryByRole('menu')).not.toBeInTheDocument()
-    } finally {
-      vi.useRealTimers()
-    }
+    const bar = screen.getByRole('progressbar')
+    const marker = bar.querySelector('span[aria-hidden]') as HTMLElement | null
+    expect(marker).not.toBeNull()
+    expect(marker!.style.left).toMatch(/^\d+(\.\d+)?%$/)
   })
 })
 

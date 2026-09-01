@@ -181,24 +181,26 @@ describe('BudgetCard', () => {
     expect(screen.getByText(/10,000/)).toBeInTheDocument()
   })
 
-  it('uses the green bar below 75%', () => {
+  // Health bands resolve through semantic tokens, not raw palette classes, so
+  // they follow whichever of the six themes is active.
+  it('uses the income bar below 75%', () => {
     render(<BudgetCard budget={makeBudget({ percent: 25 })} onEdit={noop} onDelete={noop} />)
-    expect(screen.getByTestId('budget-progress-bar').className).toContain('bg-green-500')
+    expect(screen.getByTestId('budget-progress-bar').className).toContain('bg-income')
   })
 
-  it('uses the amber bar at 75%', () => {
+  it('uses the warning bar at 75%', () => {
     render(<BudgetCard budget={makeBudget({ percent: 75 })} onEdit={noop} onDelete={noop} />)
-    expect(screen.getByTestId('budget-progress-bar').className).toContain('bg-amber-500')
+    expect(screen.getByTestId('budget-progress-bar').className).toContain('bg-warning-fill')
   })
 
-  it('uses the amber bar at 90%', () => {
+  it('uses the warning bar at 90%', () => {
     render(<BudgetCard budget={makeBudget({ percent: 90 })} onEdit={noop} onDelete={noop} />)
-    expect(screen.getByTestId('budget-progress-bar').className).toContain('bg-amber-500')
+    expect(screen.getByTestId('budget-progress-bar').className).toContain('bg-warning-fill')
   })
 
-  it('uses the red bar above 90%', () => {
+  it('uses the expense bar above 90%', () => {
     render(<BudgetCard budget={makeBudget({ percent: 91 })} onEdit={noop} onDelete={noop} />)
-    expect(screen.getByTestId('budget-progress-bar').className).toContain('bg-red-500')
+    expect(screen.getByTestId('budget-progress-bar').className).toContain('bg-expense')
   })
 
   it('caps the bar width at 100% when overspent', () => {

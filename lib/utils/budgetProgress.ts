@@ -14,16 +14,20 @@ export function budgetHealth(percent: number): BudgetHealth {
   return 'safe'
 }
 
+/**
+ * Bar fills use --warning-fill for the amber band; text uses --warning, which
+ * is a step darker so it clears 4.5:1 on --card in the light theme.
+ */
 export const HEALTH_BAR_CLASS: Record<BudgetHealth, string> = {
-  safe: 'bg-green-500',
-  warning: 'bg-amber-500',
-  danger: 'bg-red-500',
+  safe: 'bg-income',
+  warning: 'bg-warning-fill',
+  danger: 'bg-expense',
 }
 
 export const HEALTH_TEXT_CLASS: Record<BudgetHealth, string> = {
-  safe: 'text-green-600 dark:text-green-400',
-  warning: 'text-amber-600 dark:text-amber-400',
-  danger: 'text-red-600 dark:text-red-400',
+  safe: 'text-income',
+  warning: 'text-warning',
+  danger: 'text-expense',
 }
 
 /** Bar width, clamped to 0–100 even when the budget is overspent. */

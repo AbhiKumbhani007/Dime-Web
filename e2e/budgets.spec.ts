@@ -90,7 +90,7 @@ test.describe('Budgets', () => {
     await expect(card.getByText(/10,000/)).toBeVisible()
 
     // 25% → green bar
-    await expect(page.getByTestId('budget-progress-bar')).toHaveClass(/bg-green-500/)
+    await expect(page.getByTestId('budget-progress-bar')).toHaveClass(/bg-income/)
   })
 
   test('an overspent budget shows a red bar and an over-by line', async ({
@@ -121,7 +121,7 @@ test.describe('Budgets', () => {
     await loginViaUI(page, testUser)
     await page.goto('/budgets')
 
-    await expect(page.getByTestId('budget-progress-bar')).toHaveClass(/bg-red-500/)
+    await expect(page.getByTestId('budget-progress-bar')).toHaveClass(/bg-expense/)
     await expect(page.getByText(/Over by/)).toBeVisible()
   })
 

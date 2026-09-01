@@ -58,8 +58,8 @@ export function TransactionItem({
 
   const amountText = formatINR(transaction.amount)
   const amountClass = transaction.isIncome
-    ? 'text-[color:var(--success,#22c55e)]'
-    : 'text-[var(--destructive)]'
+    ? 'text-income'
+    : 'text-expense'
 
   const emoji = category?.emoji ?? '💸'
   const color = category?.color ?? '#6b7280'

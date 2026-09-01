@@ -5,7 +5,7 @@ import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts'
 import { formatINR } from '@/lib/utils/currency'
 import type { CategoryBreakdownRow } from '@/lib/api/analytics'
 
-const FALLBACK_COLOUR = '#6b7280'
+const FALLBACK_COLOUR = 'var(--muted-foreground)'
 
 interface CategoryDonutProps {
   rows: CategoryBreakdownRow[]

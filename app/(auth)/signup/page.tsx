@@ -2,14 +2,18 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Loader2 } from 'lucide-react'
 
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { AuthLayout } from '@/components/auth/AuthLayout'
+import {
+  AuthError,
+  AuthField,
+  PasswordField,
+  PasswordStrength,
+} from '@/components/auth/AuthFields'
+import { AuthSubmit, GoogleButton, AuthSwitch } from '@/components/auth/AuthActions'
 import { register as registerApi } from '@/lib/api/auth'
 import { useAuthStore } from '@/store/useAuthStore'
 
@@ -35,10 +39,14 @@ export default function SignupPage() {
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<SignupFormValues>({
     resolver: zodResolver(signupSchema),
+    defaultValues: { name: '', email: '', password: '', confirmPassword: '' },
   })
+
+  const password = watch('password') ?? ''
 
   async function onSubmit(values: SignupFormValues) {
     setApiError(null)
@@ -57,138 +65,60 @@ export default function SignupPage() {
   }
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-6 bg-[var(--background)]">
-      <div className="w-full max-w-sm mx-auto mt-8 p-8 rounded-2xl bg-[var(--card)] border border-[var(--border)] shadow-sm">
-        {/* Brand */}
-        <div className="mb-8 text-center">
-          <h1 className="font-bold text-3xl text-[var(--foreground)]">Paisa</h1>
-          <p className="mt-1 text-sm text-[var(--muted-foreground)]">Your money, simplified</p>
+    <AuthLayout
+      title="Create your account"
+      subtitle="Free, and your data exports as CSV whenever you want."
+    >
+      {apiError && <AuthError message={apiError} />}
+
+      <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-5">
+        <div className="flex flex-col gap-3">
+          <AuthField
+            id="name"
+            label="Name"
+            placeholder="Abhi Kumbhani"
+            autoComplete="name"
+            error={errors.name?.message}
+            {...register('name')}
+          />
+
+          <AuthField
+            id="email"
+            type="email"
+            label="Email"
+            placeholder="you@example.com"
+            autoComplete="email"
+            error={errors.email?.message}
+            {...register('email')}
+          />
+
+          <PasswordField
+            id="password"
+            label="Password"
+            placeholder="At least 8 characters"
+            autoComplete="new-password"
+            error={errors.password?.message}
+            {...register('password')}
+          >
+            <PasswordStrength password={password} />
+          </PasswordField>
+
+          <PasswordField
+            id="confirmPassword"
+            label="Confirm password"
+            placeholder="Repeat your password"
+            autoComplete="new-password"
+            error={errors.confirmPassword?.message}
+            {...register('confirmPassword')}
+          />
         </div>
 
-        {/* API Error */}
-        {apiError && (
-          <div className="mb-4 rounded-lg bg-[var(--destructive)]/10 border border-[var(--destructive)]/20 px-4 py-3 text-sm text-[var(--destructive)]">
-            {apiError}
-          </div>
-        )}
+        <AuthSubmit busy={isSubmitting} label="Create account" busyLabel="Creating account…" />
+      </form>
 
-        {/* Form */}
-        <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-4">
-          <div className="space-y-1">
-            <label
-              htmlFor="name"
-              className="text-sm font-medium text-[var(--foreground)]"
-            >
-              Name <span className="text-[var(--muted-foreground)]">(optional)</span>
-            </label>
-            <Input
-              id="name"
-              type="text"
-              placeholder="Jane Doe"
-              autoComplete="name"
-              {...register('name')}
-            />
-          </div>
+      <GoogleButton />
 
-          <div className="space-y-1">
-            <label
-              htmlFor="email"
-              className="text-sm font-medium text-[var(--foreground)]"
-            >
-              Email
-            </label>
-            <Input
-              id="email"
-              type="email"
-              placeholder="you@example.com"
-              autoComplete="email"
-              {...register('email')}
-              className={
-                errors.email
-                  ? 'border-[var(--destructive)] focus-visible:ring-[var(--destructive)]'
-                  : ''
-              }
-            />
-            {errors.email && (
-              <p className="text-xs text-[var(--destructive)]">{errors.email.message}</p>
-            )}
-          </div>
-
-          <div className="space-y-1">
-            <label
-              htmlFor="password"
-              className="text-sm font-medium text-[var(--foreground)]"
-            >
-              Password
-            </label>
-            <Input
-              id="password"
-              type="password"
-              placeholder="••••••••"
-              autoComplete="new-password"
-              {...register('password')}
-              className={
-                errors.password
-                  ? 'border-[var(--destructive)] focus-visible:ring-[var(--destructive)]'
-                  : ''
-              }
-            />
-            {errors.password && (
-              <p className="text-xs text-[var(--destructive)]">{errors.password.message}</p>
-            )}
-          </div>
-
-          <div className="space-y-1">
-            <label
-              htmlFor="confirmPassword"
-              className="text-sm font-medium text-[var(--foreground)]"
-            >
-              Confirm Password
-            </label>
-            <Input
-              id="confirmPassword"
-              type="password"
-              placeholder="••••••••"
-              autoComplete="new-password"
-              {...register('confirmPassword')}
-              className={
-                errors.confirmPassword
-                  ? 'border-[var(--destructive)] focus-visible:ring-[var(--destructive)]'
-                  : ''
-              }
-            />
-            {errors.confirmPassword && (
-              <p className="text-xs text-[var(--destructive)]">{errors.confirmPassword.message}</p>
-            )}
-          </div>
-
-          <Button
-            type="submit"
-            className="w-full"
-            disabled={isSubmitting}
-          >
-            {isSubmitting ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Creating account…
-              </>
-            ) : (
-              'Create account'
-            )}
-          </Button>
-        </form>
-
-        {/* Footer link */}
-        <p className="mt-6 text-center text-sm text-[var(--muted-foreground)]">
-          Already have an account?{' '}
-          <Link
-            href="/login"
-            className="font-medium text-[var(--accent)] hover:underline"
-          >
-            Sign in
-          </Link>
-        </p>
-      </div>
-    </main>
+      <AuthSwitch prompt="Already have an account?" href="/login" label="Sign in" />
+    </AuthLayout>
   )
 }

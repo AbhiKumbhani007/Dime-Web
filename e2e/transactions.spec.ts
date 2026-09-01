@@ -13,9 +13,11 @@ test.describe('Transactions CRUD', () => {
     await page.getByPlaceholder('Optional note').fill('Groceries')
     await page.getByRole('button', { name: /^save$/i }).click()
 
-    // Row visible with amount and note
-    await expect(page.getByText('Groceries')).toBeVisible()
-    await expect(page.getByText(/150/)).toBeVisible()
+    // Row visible with amount and note. Scoped to the row because the amount
+    // also appears in that day's group total header.
+    const row = page.locator('[data-testid^="transaction-"]').filter({ hasText: 'Groceries' })
+    await expect(row).toBeVisible()
+    await expect(row.getByText(/150/)).toBeVisible()
   })
 
   test('edit a transaction updates the note in place', async ({

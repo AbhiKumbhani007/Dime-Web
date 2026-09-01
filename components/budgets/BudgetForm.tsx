@@ -122,7 +122,10 @@ export function BudgetForm({ open, onOpenChange, budget, onSuccess }: BudgetForm
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="max-h-[90vh] overflow-y-auto rounded-t-2xl">
+      <SheetContent
+        side="right"
+        className="scrollbar-thin w-full overflow-y-auto sm:max-w-[520px] sm:rounded-l-2xl"
+      >
         <SheetHeader className="mb-4">
           <SheetTitle>{isEdit ? 'Edit Budget' : 'New Budget'}</SheetTitle>
         </SheetHeader>

@@ -12,12 +12,17 @@
  *       - We silently call POST /api/auth/refresh.  On success we set the
  *         new accessToken in the store and let the app render.
  *       - On failure we clear auth and send the user to /login.
+ *  3. Re-reads the user from the server once the session is ready.
+ *     `user` is persisted in localStorage, so without this it stays frozen
+ *     at whatever it was when this browser last logged in — which meant an
+ *     account-level setting like `theme` never propagated to another device.
  */
 
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuthStore } from '@/store/useAuthStore'
 import { initApiClient } from '@/lib/api'
+import { getMe } from '@/lib/api/auth'
 
 type Status = 'loading' | 'ready' | 'unauthenticated'
 
@@ -80,6 +85,16 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         router.replace('/login')
       })
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Refresh the cached user once we have a working token. Deliberately not
+  // gated on success: a failure here just leaves the persisted copy in place,
+  // which is strictly better than blocking the app on a non-essential read.
+  useEffect(() => {
+    if (status !== 'ready') return
+    getMe()
+      .then((freshUser) => useAuthStore.getState().updateUser(freshUser))
+      .catch(() => {})
+  }, [status])
 
   if (status === 'loading') {
     return (

@@ -72,7 +72,7 @@ describe('ThemeSelector', () => {
 })
 
 describe('ThemeSync', () => {
-  it('calls setTheme with user.theme on mount when it differs from current theme', () => {
+  it('applies the account theme', () => {
     mockUserTheme = 'sunset'
     mockCurrentTheme = 'light'
 
@@ -81,13 +81,32 @@ describe('ThemeSync', () => {
     expect(mockSetTheme).toHaveBeenCalledWith('sunset')
   })
 
-  it('does not call setTheme when user theme matches current theme', () => {
-    mockUserTheme = 'light'
+  it('applies the account theme once it arrives, not just on mount', () => {
+    // SessionProvider fetches the user asynchronously, so on the first render
+    // there is no account theme yet. The old mount-only effect meant that in
+    // practice the sync never ran and the local cache won permanently.
+    mockUserTheme = undefined
     mockCurrentTheme = 'light'
 
-    render(<ThemeSync />)
-
+    const { rerender } = render(<ThemeSync />)
     expect(mockSetTheme).not.toHaveBeenCalled()
+
+    mockUserTheme = 'sunset'
+    rerender(<ThemeSync />)
+
+    expect(mockSetTheme).toHaveBeenCalledWith('sunset')
+  })
+
+  it('applies a given account theme only once', () => {
+    // Re-asserting it on every render would fight the Settings theme picker.
+    mockUserTheme = 'sunset'
+    mockCurrentTheme = 'light'
+
+    const { rerender } = render(<ThemeSync />)
+    rerender(<ThemeSync />)
+    rerender(<ThemeSync />)
+
+    expect(mockSetTheme).toHaveBeenCalledTimes(1)
   })
 
   it('does not call setTheme when there is no user theme', () => {

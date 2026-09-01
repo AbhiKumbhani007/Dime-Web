@@ -69,7 +69,7 @@ import { OverviewCard } from '@/components/insights/OverviewCard'
 import { CategoryDonut } from '@/components/insights/CategoryDonut'
 import { TopDaysList } from '@/components/insights/TopDaysList'
 import { PeriodNavigator } from '@/components/insights/PeriodNavigator'
-import { CollapsibleSection } from '@/components/insights/CollapsibleSection'
+import { Panel } from '@/components/insights/Panel'
 import { BudgetVsActualChart } from '@/components/insights/BudgetVsActualChart'
 import {
   periodLabel,
@@ -250,8 +250,13 @@ describe('OverviewCard', () => {
   })
 
   it('colours a negative net balance as a loss', () => {
-    render(<OverviewCard overview={{ ...OVERVIEW, netBalance: -500 }} />)
-    expect(screen.getByTestId('net-balance').className).toMatch(/text-red/)
+    const { rerender } = render(<OverviewCard overview={{ ...OVERVIEW, netBalance: -500 }} />)
+    // Money colour is a semantic token now, so it follows the active theme
+    // rather than a fixed red from the palette.
+    expect(screen.getByTestId('net-balance')).toHaveStyle({ color: 'var(--expense)' })
+
+    rerender(<OverviewCard overview={{ ...OVERVIEW, netBalance: 500 }} />)
+    expect(screen.getByTestId('net-balance')).toHaveStyle({ color: 'var(--income)' })
   })
 
   it('singularises a single transaction', () => {
@@ -339,31 +344,29 @@ describe('PeriodNavigator', () => {
   })
 })
 
-describe('CollapsibleSection', () => {
-  it('is collapsed by default and expands on click', async () => {
-    const user = userEvent.setup()
+describe('Panel', () => {
+  // Insights used to hide its advanced charts behind accordions. The design
+  // shows every panel at once, so a Panel has no disclosure state — its
+  // contract is simply that the heading and the content are both always there.
+  it('renders its heading and content', () => {
     render(
-      <CollapsibleSection title="Trends">
+      <Panel title="Trends">
         <p>panel content</p>
-      </CollapsibleSection>
+      </Panel>
     )
 
-    const toggle = screen.getByRole('button', { name: /Trends/ })
-    expect(toggle).toHaveAttribute('aria-expanded', 'false')
-    expect(screen.queryByText('panel content')).not.toBeInTheDocument()
-
-    await user.click(toggle)
-    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByRole('heading', { name: 'Trends' })).toBeInTheDocument()
     expect(screen.getByText('panel content')).toBeInTheDocument()
   })
 
-  it('honours defaultOpen', () => {
+  it('renders an aside beside the heading', () => {
     render(
-      <CollapsibleSection title="Trends" defaultOpen>
+      <Panel title="Trends" aside={<span>6 months</span>}>
         <p>panel content</p>
-      </CollapsibleSection>
+      </Panel>
     )
-    expect(screen.getByText('panel content')).toBeInTheDocument()
+
+    expect(screen.getByText('6 months')).toBeInTheDocument()
   })
 })
 
@@ -442,7 +445,8 @@ describe('InsightsPage', () => {
 
     expect(mockByCategory.mock.calls.at(-1)![0].isIncome).toBe(false)
 
-    await user.click(screen.getByRole('radio', { name: 'Income' }))
+    // Labelled "Out"/"In" per the design, inside the "By category" panel.
+    await user.click(screen.getByRole('radio', { name: 'In' }))
     expect(mockByCategory.mock.calls.at(-1)![0].isIncome).toBe(true)
   })
 
@@ -507,43 +511,43 @@ describe('InsightsPage', () => {
     expect(screen.getByRole('button', { name: 'Previous period' })).toBeInTheDocument()
   })
 
-  it('renders all five advanced sections, collapsed', () => {
+  // The advanced charts are no longer behind accordions — the design shows
+  // every panel at once — so they must all be mounted on first render.
+  it('renders every analytics panel without any disclosure', () => {
     render(<InsightsPage />)
 
     for (const title of [
-      'Trends (6 months)',
+      'Trends',
       'Net cashflow',
       'Budget vs actual',
       'Top spending days',
       'Spending velocity',
     ]) {
-      expect(screen.getByRole('button', { name: new RegExp(title.replace(/[()]/g, '.')) }))
-        .toHaveAttribute('aria-expanded', 'false')
+      expect(screen.getByRole('heading', { name: title })).toBeInTheDocument()
+    }
+
+    // None of the panel titles is a disclosure control. (Scoped to the panel
+    // titles deliberately: the date-range Popover trigger is legitimately an
+    // aria-expanded button and must not trip this.)
+    for (const title of ['Trends', 'Net cashflow', 'Budget vs actual']) {
+      expect(screen.queryByRole('button', { name: title })).not.toBeInTheDocument()
     }
   })
 
-  it('expanding Trends mounts the chart', async () => {
-    const user = userEvent.setup()
+  it('mounts the advanced charts immediately', () => {
     render(<InsightsPage />)
 
-    expect(screen.queryByTestId('trends-chart')).not.toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: /Trends/ }))
     expect(screen.getByTestId('trends-chart')).toBeInTheDocument()
+    expect(screen.getByTestId('net-cashflow-chart')).toBeInTheDocument()
+    // budget-vs-actual and spending-velocity render prompts instead of charts
+    // when the fixture has no budgets; their headings are asserted above.
   })
 
-  it('sections expand independently of one another', async () => {
-    const user = userEvent.setup()
+  it('shows each panel its own empty state rather than hiding it', () => {
     render(<InsightsPage />)
 
-    await user.click(screen.getByRole('button', { name: /Top spending days/ }))
-
-    // Top days opened (empty fixture → its empty state)...
+    // The fixture seeds no spending, so Top spending days renders its empty
+    // state — visible immediately, where it used to need expanding.
     expect(screen.getByText(/No spending recorded/)).toBeInTheDocument()
-    // ...while Trends stayed shut.
-    expect(screen.queryByTestId('trends-chart')).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Trends/ })).toHaveAttribute(
-      'aria-expanded',
-      'false'
-    )
   })
 })

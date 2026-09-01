@@ -97,8 +97,11 @@ test.describe('Insights', () => {
     await loginViaUI(page, testUser)
     await page.goto('/insights')
 
-    // exact: the 'Rental Income' category chip is also a radio named /Income/.
-    await page.getByRole('radio', { name: 'Income', exact: true }).click()
+    // The donut's own toggle, labelled "In" per the design. Scoped to the
+    // "By category" panel because the category chip row is a radiogroup too.
+    await page.getByRole('radiogroup', { name: 'Donut type' })
+      .getByRole('radio', { name: 'In', exact: true })
+      .click()
 
     const donut = page.getByTestId('category-donut')
     await expect(donut.getByText(/Salary/)).toBeVisible()
@@ -157,7 +160,7 @@ test.describe('Insights', () => {
     await expect(page.getByTestId('category-donut-empty')).toBeVisible()
   })
 
-  test('advanced sections start collapsed and expand independently', async ({
+  test('every analytics panel is visible without disclosure', async ({
     page,
     testUser,
     api,
@@ -166,19 +169,19 @@ test.describe('Insights', () => {
     await loginViaUI(page, testUser)
     await page.goto('/insights')
 
-    const trends = page.getByRole('button', { name: /Trends/ })
-    await expect(trends).toHaveAttribute('aria-expanded', 'false')
-    await expect(page.getByTestId('trends-chart')).toHaveCount(0)
+    // The accordions are gone — the design shows every panel at once.
+    for (const title of [
+      'Trends',
+      'Budget vs actual',
+      'Spending velocity',
+      'Net cashflow',
+      'Top spending days',
+    ]) {
+      await expect(page.getByRole('heading', { name: title })).toBeVisible()
+    }
 
-    await trends.click()
-    await expect(trends).toHaveAttribute('aria-expanded', 'true')
     await expect(page.getByTestId('trends-chart')).toBeVisible()
-
-    // Net cashflow stayed shut.
-    await expect(page.getByRole('button', { name: /Net cashflow/ })).toHaveAttribute(
-      'aria-expanded',
-      'false'
-    )
+    await expect(page.getByTestId('net-cashflow-chart')).toBeVisible()
   })
 
   test('top spending days lists the seeded day', async ({ page, testUser, api }) => {
@@ -186,7 +189,6 @@ test.describe('Insights', () => {
     await loginViaUI(page, testUser)
     await page.goto('/insights')
 
-    await page.getByRole('button', { name: /Top spending days/ }).click()
 
     const list = page.getByTestId('top-days-list')
     await expect(list).toBeVisible()
@@ -209,7 +211,6 @@ test.describe('Insights', () => {
     await loginViaUI(page, testUser)
     await page.goto('/insights')
 
-    await page.getByRole('button', { name: /Budget vs actual/ }).click()
     await expect(page.getByTestId('budget-vs-actual-chart')).toBeVisible()
   })
 
@@ -232,7 +233,6 @@ test.describe('Insights', () => {
     await loginViaUI(page, testUser)
     await page.goto('/insights')
 
-    await page.getByRole('button', { name: /Spending velocity/ }).click()
     const velocity = page.getByTestId('spending-velocity')
     await expect(velocity).toBeVisible()
     await expect(velocity.getByText(/of period elapsed/)).toBeVisible()

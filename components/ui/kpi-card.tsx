@@ -11,6 +11,8 @@ export interface KpiCardProps {
    * practice one of `var(--income)`, `var(--expense)` or `var(--foreground)`.
    */
   tone?: string
+  /** Applied to the value, so a caller can keep an existing test hook on it. */
+  valueTestId?: string
   className?: string
 }
 
@@ -19,7 +21,14 @@ export interface KpiCardProps {
  * A 3px full-height rail on the left carries the semantic colour; the number
  * is mono so a row of them aligns down the column.
  */
-export function KpiCard({ label, value, sub, tone = 'var(--foreground)', className }: KpiCardProps) {
+export function KpiCard({
+  label,
+  value,
+  sub,
+  tone = 'var(--foreground)',
+  valueTestId,
+  className,
+}: KpiCardProps) {
   return (
     <div
       className={cn(
@@ -29,7 +38,11 @@ export function KpiCard({ label, value, sub, tone = 'var(--foreground)', classNa
     >
       <span aria-hidden className="absolute inset-y-0 left-0 w-[3px]" style={{ background: tone }} />
       <span className="text-[11px] font-medium text-muted-foreground">{label}</span>
-      <span className="font-mono text-xl font-bold tracking-[-0.025em]" style={{ color: tone }}>
+      <span
+        data-testid={valueTestId}
+        className="font-mono text-xl font-bold tracking-[-0.025em]"
+        style={{ color: tone }}
+      >
         {value}
       </span>
       {sub && <span className="text-[10.5px] text-muted-foreground">{sub}</span>}

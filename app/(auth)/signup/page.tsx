@@ -61,7 +61,7 @@ export default function SignupPage() {
       <div className="w-full max-w-sm mx-auto mt-8 p-8 rounded-2xl bg-[var(--card)] border border-[var(--border)] shadow-sm">
         {/* Brand */}
         <div className="mb-8 text-center">
-          <h1 className="font-bold text-3xl text-[var(--foreground)]">Dime</h1>
+          <h1 className="font-bold text-3xl text-[var(--foreground)]">Paisa</h1>
           <p className="mt-1 text-sm text-[var(--muted-foreground)]">Your money, simplified</p>
         </div>
 

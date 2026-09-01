@@ -1,11 +1,11 @@
 {
-  "name": "Dime — Expense Tracker",
-  "short_name": "Dime",
+  "name": "Paisa — Expense Tracker",
+  "short_name": "Paisa",
   "description": "Track expenses, manage budgets, and keep tabs on money you lend.",
   "display": "standalone",
   "start_url": "/",
   "scope": "/",
-  "theme_color": "#6366f1",
+  "theme_color": "#4f46e5",
   "background_color": "#ffffff",
   "orientation": "portrait-primary",
   "icons": [

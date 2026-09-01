@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { useForm } from 'react-hook-form'
+import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 
@@ -39,14 +39,17 @@ export default function SignupPage() {
   const {
     register,
     handleSubmit,
-    watch,
+    control,
     formState: { errors, isSubmitting },
   } = useForm<SignupFormValues>({
     resolver: zodResolver(signupSchema),
     defaultValues: { name: '', email: '', password: '', confirmPassword: '' },
   })
 
-  const password = watch('password') ?? ''
+  // useWatch rather than watch(): it subscribes to the single field instead of
+  // re-rendering the whole form on every keystroke, and unlike watch() it does
+  // not opt this component out of the React Compiler.
+  const password = useWatch({ control, name: 'password' }) ?? ''
 
   async function onSubmit(values: SignupFormValues) {
     setApiError(null)

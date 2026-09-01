@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { act, render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 // Mock next/navigation
@@ -82,11 +82,7 @@ import { BudgetForm } from '@/components/budgets/BudgetForm'
 import { BudgetDonutSummary } from '@/components/budgets/BudgetDonutSummary'
 import { DeleteBudgetDialog } from '@/components/budgets/DeleteBudgetDialog'
 import BudgetsPage from '@/app/(app)/budgets/page'
-import {
-  PageChromeProvider,
-  usePageChromeValue,
-  type PageChrome,
-} from '@/components/layout/PageChrome'
+import { PageChromeProvider, usePageChromeValue } from '@/components/layout/PageChrome'
 import { budgetHealth, clampPercent } from '@/lib/utils/budgetProgress'
 import type { BudgetWithProgress } from '@/lib/api/budgets'
 
@@ -525,10 +521,19 @@ describe('BudgetsPage', () => {
   // the page is actually responsible for: that invoking the published action
   // opens the form.
   it('publishes a primary action that opens the form', async () => {
-    let chrome: PageChrome = {}
+    const user = userEvent.setup()
+
+    // Stands in for the shell: renders whatever the page published, the same
+    // way TopBar and Fab do. Rendering it rather than capturing the value into
+    // an outer variable keeps the assertion on observable behaviour.
     function ChromeProbe() {
-      chrome = usePageChromeValue()
-      return null
+      const { primaryAction } = usePageChromeValue()
+      if (!primaryAction) return null
+      return (
+        <button type="button" onClick={primaryAction.onClick}>
+          {primaryAction.label}
+        </button>
+      )
     }
 
     render(
@@ -538,9 +543,7 @@ describe('BudgetsPage', () => {
       </PageChromeProvider>,
     )
 
-    await waitFor(() => expect(chrome.primaryAction?.label).toBe('Add budget'))
-
-    act(() => chrome.primaryAction!.onClick())
+    await user.click(await screen.findByRole('button', { name: 'Add budget' }))
 
     expect(await screen.findByText('New Budget')).toBeInTheDocument()
   })

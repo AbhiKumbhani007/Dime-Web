@@ -16,18 +16,18 @@ const geistMono = Geist_Mono({
 })
 
 export const metadata: Metadata = {
-  title: 'Dime — Expense Tracker',
+  title: 'Paisa — Expense Tracker',
   description: 'Track your income and expenses, manage budgets, and keep tabs on money you lend.',
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'Dime',
+    title: 'Paisa',
   },
 }
 
 export const viewport: Viewport = {
-  themeColor: '#6366f1',
+  themeColor: '#4f46e5',
   width: 'device-width',
   initialScale: 1,
   maximumScale: 1,

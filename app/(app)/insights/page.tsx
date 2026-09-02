@@ -6,11 +6,13 @@ import { endOfDay, startOfDay } from 'date-fns'
 import type { DateRange } from 'react-day-picker'
 
 import { Skeleton } from '@/components/ui/skeleton'
+import { ChipRow } from '@/components/ui/chip-row'
+import { SegmentedControl } from '@/components/ui/segmented-control'
+import { Panel, PanelLegend } from '@/components/insights/Panel'
 import { PeriodNavigator } from '@/components/insights/PeriodNavigator'
 import { OverviewCard } from '@/components/insights/OverviewCard'
 import { IncomeExpenseBarChart } from '@/components/insights/IncomeExpenseBarChart'
 import { CategoryDonut } from '@/components/insights/CategoryDonut'
-import { CollapsibleSection } from '@/components/insights/CollapsibleSection'
 import { TrendsChart, NetCashflowChart } from '@/components/insights/TrendsChart'
 import { BudgetVsActualChart } from '@/components/insights/BudgetVsActualChart'
 import { TopDaysList } from '@/components/insights/TopDaysList'
@@ -28,6 +30,19 @@ import { useBudgets } from '@/hooks/useBudgets'
 import { useCategories } from '@/hooks/useCategories'
 import { periodBounds, toISO } from '@/lib/utils/analyticsPeriod'
 import { ANALYTICS_PERIODS, type AnalyticsPeriod } from '@/lib/api/analytics'
+import { cn } from '@/lib/utils'
+
+const DONUT_OPTIONS = [
+  { value: 'expense' as const, label: 'Out' },
+  { value: 'income' as const, label: 'In' },
+]
+
+const CHIP =
+  'flex h-[34px] shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border px-3 ' +
+  'text-[12.5px] font-medium whitespace-nowrap transition-colors ' +
+  'focus-visible:outline-2 focus-visible:outline-ring'
+const CHIP_ON = 'border-accent bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] text-accent'
+const CHIP_OFF = 'border-border bg-card text-foreground hover:border-accent'
 
 export default function InsightsPage() {
   const router = useRouter()
@@ -79,163 +94,156 @@ export default function InsightsPage() {
   }, [byCategory.data, categoryId])
 
   return (
-    <div className="flex min-h-full w-full min-w-0 flex-col gap-4 p-4 pb-24">
-      {/* Period tabs */}
-      <div role="tablist" aria-label="Period" className="grid grid-cols-3 gap-1.5">
-        {ANALYTICS_PERIODS.map((p) => (
-          <button
-            key={p.value}
-            type="button"
-            role="tab"
-            aria-selected={period === p.value}
-            onClick={() => setPeriod(p.value)}
-            className={`rounded-lg px-3 py-2 text-sm font-medium transition-all ${
-              period === p.value
-                ? 'bg-[var(--primary)] text-[var(--primary-foreground)]'
-                : 'border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--muted)]'
-            }`}
-          >
-            {p.label}
-          </button>
-        ))}
+    <div className="flex min-h-full w-full min-w-0 flex-col gap-(--gap) p-(--pad-page)">
+      <div className="flex min-w-0 flex-wrap items-center gap-3">
+        <SegmentedControl
+          label="Period"
+          role="tablist"
+          options={ANALYTICS_PERIODS.map((p) => ({ value: p.value, label: p.label }))}
+          value={period}
+          onChange={setPeriod}
+        />
+
+        {!usingCustomRange && (
+          <PeriodNavigator period={period} date={date} onChange={setDate} />
+        )}
+
+        <div className="ml-auto flex min-w-0 items-center gap-3">
+          <DateRangePicker value={customRange} onChange={setCustomRange} />
+        </div>
       </div>
 
-      <DateRangePicker value={customRange} onChange={setCustomRange} />
-
-      {!usingCustomRange && (
-        <PeriodNavigator period={period} date={date} onChange={setDate} />
+      {categories.length > 0 && (
+        <ChipRow label="Filter by category" role="radiogroup">
+          <button
+            type="button"
+            role="radio"
+            aria-checked={categoryId === undefined}
+            onClick={() => setCategoryId(undefined)}
+            className={cn(CHIP, categoryId === undefined ? CHIP_ON : CHIP_OFF)}
+          >
+            All
+          </button>
+          {categories.map((category) => (
+            <button
+              key={category.id}
+              type="button"
+              role="radio"
+              aria-checked={categoryId === category.id}
+              onClick={() =>
+                setCategoryId((current) => (current === category.id ? undefined : category.id))
+              }
+              className={cn(CHIP, categoryId === category.id ? CHIP_ON : CHIP_OFF)}
+            >
+              <span aria-hidden>{category.emoji}</span>
+              <span className="max-w-[12ch] truncate">{category.name}</span>
+            </button>
+          ))}
+        </ChipRow>
       )}
 
-      {/* Overview */}
       {overview.isLoading ? (
-        <Skeleton data-testid="overview-skeleton" className="h-36 w-full rounded-2xl" />
+        <Skeleton data-testid="overview-skeleton" className="h-[92px] w-full rounded-[14px]" />
       ) : overview.data ? (
         <OverviewCard overview={overview.data} />
       ) : null}
 
-      {/* Category filter */}
-      {categories.length > 0 && (
-        <div className="w-full min-w-0 overflow-x-auto scrollbar-hide pb-1">
-          <div role="radiogroup" aria-label="Filter by category" className="flex w-max gap-1.5">
-            <button
-              type="button"
-              role="radio"
-              aria-checked={categoryId === undefined}
-              onClick={() => setCategoryId(undefined)}
-              className={`shrink-0 rounded-full px-3 py-1.5 text-xs transition-all ${
-                categoryId === undefined
-                  ? 'bg-[var(--primary)] text-[var(--primary-foreground)]'
-                  : 'border border-[var(--border)] bg-[var(--card)]'
-              }`}
-            >
-              All
-            </button>
-            {categories.map((category) => (
-              <button
-                key={category.id}
-                type="button"
-                role="radio"
-                aria-checked={categoryId === category.id}
-                onClick={() =>
-                  setCategoryId((current) => (current === category.id ? undefined : category.id))
-                }
-                className={`shrink-0 rounded-full px-3 py-1.5 text-xs transition-all ${
-                  categoryId === category.id
-                    ? 'bg-[var(--primary)] text-[var(--primary-foreground)]'
-                    : 'border border-[var(--border)] bg-[var(--card)]'
-                }`}
-              >
-                {category.emoji} {category.name}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
+      {/* Primary row: the bar series gets twice the width of the donut. */}
+      <div className="grid min-w-0 gap-(--gap) lg:grid-cols-[2fr_1fr]">
+        <Panel
+          title="Income vs expense"
+          aside={
+            <PanelLegend
+              items={[
+                { label: 'Income', colour: 'var(--income)' },
+                { label: 'Expense', colour: 'var(--expense)' },
+                { label: 'Avg', colour: 'var(--muted-foreground)', dashed: true },
+              ]}
+            />
+          }
+        >
+          {byPeriod.isLoading ? (
+            <Skeleton data-testid="chart-skeleton" className="h-56 w-full rounded-xl" />
+          ) : byPeriod.data ? (
+            <IncomeExpenseBarChart data={byPeriod.data} onBarClick={() => router.push('/log')} />
+          ) : null}
+        </Panel>
 
-      {/* Bar chart */}
-      {byPeriod.isLoading ? (
-        <Skeleton data-testid="chart-skeleton" className="h-56 w-full rounded-2xl" />
-      ) : byPeriod.data ? (
-        <IncomeExpenseBarChart
-          data={byPeriod.data}
-          onBarClick={() => router.push('/log')}
-        />
-      ) : null}
-
-      {/* Category donut with an income/expense toggle */}
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="text-sm font-semibold">By category</h2>
-        <div role="radiogroup" aria-label="Donut type" className="flex gap-1.5">
-          {[
-            { label: 'Expense', value: false },
-            { label: 'Income', value: true },
-          ].map((option) => (
-            <button
-              key={option.label}
-              type="button"
-              role="radio"
-              aria-checked={donutIsIncome === option.value}
-              onClick={() => setDonutIsIncome(option.value)}
-              className={`rounded-full px-3 py-1 text-xs transition-all ${
-                donutIsIncome === option.value
-                  ? 'bg-[var(--primary)] text-[var(--primary-foreground)]'
-                  : 'border border-[var(--border)] bg-[var(--card)]'
-              }`}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
+        <Panel
+          title="By category"
+          aside={
+            <SegmentedControl
+              size="sm"
+              label="Donut type"
+              options={DONUT_OPTIONS}
+              value={donutIsIncome ? 'income' : 'expense'}
+              onChange={(v) => setDonutIsIncome(v === 'income')}
+            />
+          }
+        >
+          {byCategory.isLoading ? (
+            <Skeleton data-testid="donut-skeleton" className="h-48 w-full rounded-xl" />
+          ) : (
+            <CategoryDonut rows={donutRows} />
+          )}
+        </Panel>
       </div>
 
-      {byCategory.isLoading ? (
-        <Skeleton data-testid="donut-skeleton" className="h-48 w-full rounded-2xl" />
-      ) : (
-        <CategoryDonut rows={donutRows} />
-      )}
+      {/* Everything that used to sit behind an accordion. The design's rule is
+          "every panel visible", so these are plain panels on a 3-up grid. */}
+      <div className="grid min-w-0 gap-(--gap) lg:grid-cols-3">
+        <Panel title="Trends" aside={<span className="text-[10.5px] text-muted-foreground">6 months</span>}>
+          {trends.isLoading ? (
+            <Skeleton className="h-52 w-full rounded-xl" />
+          ) : (
+            <TrendsChart trends={trends.data?.trends ?? []} />
+          )}
+        </Panel>
 
-      {/* ── Advanced analytics (F09) ─────────────────────────────────────── */}
-      <h2 className="mt-2 text-sm font-semibold">More analytics</h2>
+        <Panel
+          title="Budget vs actual"
+          aside={
+            <PanelLegend
+              items={[
+                { label: 'Budget', colour: 'var(--chart-budgeted)' },
+                { label: 'Actual', colour: 'var(--chart-net)' },
+              ]}
+            />
+          }
+        >
+          {budgetVsActual.isLoading ? (
+            <Skeleton className="h-52 w-full rounded-xl" />
+          ) : (
+            <BudgetVsActualChart rows={budgetVsActual.data?.budgets ?? []} />
+          )}
+        </Panel>
 
-      <CollapsibleSection title="Trends (6 months)">
-        {trends.isLoading ? (
-          <Skeleton className="h-52 w-full" />
-        ) : (
-          <TrendsChart trends={trends.data?.trends ?? []} />
-        )}
-      </CollapsibleSection>
+        <Panel title="Spending velocity">
+          {budgets.isLoading ? (
+            <Skeleton className="h-24 w-full rounded-xl" />
+          ) : (
+            <SpendingVelocity budgets={budgets.data?.budgets ?? []} />
+          )}
+        </Panel>
+      </div>
 
-      <CollapsibleSection title="Net cashflow">
-        {trends.isLoading ? (
-          <Skeleton className="h-52 w-full" />
-        ) : (
-          <NetCashflowChart trends={trends.data?.trends ?? []} />
-        )}
-      </CollapsibleSection>
+      <div className="grid min-w-0 gap-(--gap) lg:grid-cols-2">
+        <Panel title="Net cashflow" aside={<span className="text-[10.5px] text-muted-foreground">cumulative</span>}>
+          {trends.isLoading ? (
+            <Skeleton className="h-52 w-full rounded-xl" />
+          ) : (
+            <NetCashflowChart trends={trends.data?.trends ?? []} />
+          )}
+        </Panel>
 
-      <CollapsibleSection title="Budget vs actual">
-        {budgetVsActual.isLoading ? (
-          <Skeleton className="h-52 w-full" />
-        ) : (
-          <BudgetVsActualChart rows={budgetVsActual.data?.budgets ?? []} />
-        )}
-      </CollapsibleSection>
-
-      <CollapsibleSection title="Top spending days">
-        {topDays.isLoading ? (
-          <Skeleton className="h-40 w-full" />
-        ) : (
-          <TopDaysList days={topDays.data?.days ?? []} />
-        )}
-      </CollapsibleSection>
-
-      <CollapsibleSection title="Spending velocity">
-        {budgets.isLoading ? (
-          <Skeleton className="h-24 w-full" />
-        ) : (
-          <SpendingVelocity budgets={budgets.data?.budgets ?? []} />
-        )}
-      </CollapsibleSection>
+        <Panel title="Top spending days">
+          {topDays.isLoading ? (
+            <Skeleton className="h-40 w-full rounded-xl" />
+          ) : (
+            <TopDaysList days={topDays.data?.days ?? []} />
+          )}
+        </Panel>
+      </div>
     </div>
   )
 }

@@ -1,10 +1,88 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 
-/* ─── Geist font vars injected by next/font in layout.tsx ─── */
+/* ═══════════════════════════════════════════════════════════════════════════
+   Paisa — token layer
+   ---------------------------------------------------------------------------
+   Every colour in the app resolves through the custom properties below. Nothing
+   may hardcode a background, text or border colour (DESIGN.md §3.1).
+
+   The @theme block maps each property into Tailwind's colour namespace, which
+   is what makes `bg-card`, `text-muted-foreground`, `border-input`, `ring-ring`
+   and friends actually generate CSS. Without it every semantic utility in
+   components/ui/* silently compiles to nothing.
+   ═══════════════════════════════════════════════════════════════════════════ */
 
 @theme inline {
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  /* Surfaces */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+
+  /* shadcn expects popover/secondary; we alias them onto card/muted rather
+     than inventing two more palette entries per theme. */
+  --color-popover: var(--card);
+  --color-popover-foreground: var(--card-foreground);
+  --color-secondary: var(--muted);
+  --color-secondary-foreground: var(--foreground);
+
+  /* Lines */
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* Interactive */
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+
+  /* Semantic money colours — green is income, red is expense, amber is a
+     warning band. These carry meaning and are never decorative. */
+  --color-income: var(--income);
+  --color-expense: var(--expense);
+  --color-warning: var(--warning);
+  --color-warning-fill: var(--warning-fill);
+
+  /* Chart series */
+  --color-chart-budgeted: var(--chart-budgeted);
+  --color-chart-net: var(--chart-net);
+
+  /* Radius scale, derived from the single --radius token */
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+/* `dark:` follows the selected theme, not the OS. Five of the six modes are
+   dark; `system` is dark only when the OS is. */
+@custom-variant dark {
+  &:where([data-theme="dark"], [data-theme="dark"] *) {
+    @slot;
+  }
+  &:where([data-theme="dim"], [data-theme="dim"] *) {
+    @slot;
+  }
+  &:where([data-theme="midnight"], [data-theme="midnight"] *) {
+    @slot;
+  }
+  &:where([data-theme="sunset"], [data-theme="sunset"] *) {
+    @slot;
+  }
+  @media (prefers-color-scheme: dark) {
+    &:where([data-theme="system"], [data-theme="system"] *) {
+      @slot;
+    }
+  }
 }
 
 /* ─── Theme: Light (default) ─────────────────────────────── */
@@ -18,15 +96,19 @@
   --muted-foreground: #6b7280;
   --border: #e5e7eb;
   --input: #e5e7eb;
-  --primary: #6366f1;
+  --primary: #4f46e5;
   --primary-foreground: #ffffff;
-  --accent: #6366f1;
+  --accent: #4f46e5;
   --accent-foreground: #ffffff;
-  --destructive: #ef4444;
+  --destructive: #dc2626;
   --destructive-foreground: #ffffff;
-  --ring: #6366f1;
-  --income: #22c55e;
-  --expense: #ef4444;
+  --ring: #4f46e5;
+  --income: #15803d;
+  --expense: #dc2626;
+  --warning: #b45309;
+  --warning-fill: #d97706;
+  --chart-budgeted: #9ca3af;
+  --chart-net: #4f46e5;
   --radius: 0.75rem;
 }
 
@@ -49,6 +131,10 @@
   --ring: #818cf8;
   --income: #4ade80;
   --expense: #f87171;
+  --warning: #fbbf24;
+  --warning-fill: #fbbf24;
+  --chart-budgeted: #71717a;
+  --chart-net: #818cf8;
   --radius: 0.75rem;
 }
 
@@ -71,6 +157,10 @@
   --ring: #a5b4fc;
   --income: #4ade80;
   --expense: #f87171;
+  --warning: #fbbf24;
+  --warning-fill: #fbbf24;
+  --chart-budgeted: #6e6e73;
+  --chart-net: #a5b4fc;
   --radius: 0.75rem;
 }
 
@@ -93,6 +183,10 @@
   --ring: #818cf8;
   --income: #34d399;
   --expense: #f87171;
+  --warning: #fbbf24;
+  --warning-fill: #fbbf24;
+  --chart-budgeted: #64748b;
+  --chart-net: #818cf8;
   --radius: 0.75rem;
 }
 
@@ -110,15 +204,19 @@
   --primary-foreground: #1a0a00;
   --accent: #f97316;
   --accent-foreground: #1a0a00;
-  --destructive: #ef4444;
+  --destructive: #f87171;
   --destructive-foreground: #1a0a00;
   --ring: #f97316;
   --income: #a3e635;
   --expense: #f87171;
+  --warning: #fcd34d;
+  --warning-fill: #fcd34d;
+  --chart-budgeted: #a98467;
+  --chart-net: #fb923c;
   --radius: 0.75rem;
 }
 
-/* ─── System theme — follows OS preference ───────────────── */
+/* ─── System theme — mirrors Dark when the OS is dark ────── */
 @media (prefers-color-scheme: dark) {
   [data-theme="system"] {
     --background: #09090b;
@@ -138,7 +236,49 @@
     --ring: #818cf8;
     --income: #4ade80;
     --expense: #f87171;
+    --warning: #fbbf24;
+    --warning-fill: #fbbf24;
+    --chart-budgeted: #71717a;
+    --chart-net: #818cf8;
     --radius: 0.75rem;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Density
+   ---------------------------------------------------------------------------
+   The Comfortable/Dense toggle in the top bar drives six measurements at once.
+   They live as custom properties rather than component props so a screen can
+   read them straight from CSS (`p-(--pad-card)`, `h-(--row-h)`) with no
+   prop-drilling, and so density and theme compose the same way.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root,
+[data-density="comfortable"] {
+  --pad-page: 18px;
+  --gap: 14px;
+  --pad-card: 18px;
+  --row-h: 54px;
+  --row-gap: 8px;
+  --bar-h: 178px;
+}
+
+[data-density="dense"] {
+  --pad-page: 14px;
+  --gap: 10px;
+  --pad-card: 14px;
+  --row-h: 42px;
+  --row-gap: 5px;
+  --bar-h: 148px;
+}
+
+/* Mobile is always tight — density is a tablet/desktop control, and the
+   toggle is hidden below `md`. */
+@media (width < 48rem) {
+  :root,
+  [data-density="comfortable"],
+  [data-density="dense"] {
+    --pad-page: 14px;
   }
 }
 
@@ -161,16 +301,60 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Safe area padding for iOS bottom nav */
+/* ─── Utilities ──────────────────────────────────────────── */
+
+/* Safe area padding for the iOS bottom nav */
 .pb-safe {
   padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
 }
 
-/* Hide scrollbar but allow scrolling (used in horizontal chip rows) */
+/* Hide the scrollbar but keep scrolling — horizontal chip rows */
 .scrollbar-hide {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
+}
+
+/* Thin themed scrollbar — long scroll panes (sidebar, settings, modals) */
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+/* ─── Motion ─────────────────────────────────────────────── */
+@keyframes paisa-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes paisa-rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade {
+  animation: paisa-fade 0.18s ease both;
+}
+
+.animate-rise {
+  animation: paisa-rise 0.2s ease both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade,
+  .animate-rise {
+    animation: none;
+  }
 }

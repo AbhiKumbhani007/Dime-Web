@@ -28,7 +28,10 @@ test.describe('Smoke — golden path', () => {
 
     // Sheet closes + the new row appears in the list
     await expect(page.getByRole('heading', { name: /new transaction/i })).not.toBeVisible()
-    await expect(page.getByText('Coffee')).toBeVisible()
-    await expect(page.getByText(/99\.50/)).toBeVisible()
+    // Scope to the row: the amount also appears in the day-group total header,
+    // which for a single transaction on that day is the same figure.
+    const row = page.locator('[data-testid^="transaction-"]').filter({ hasText: 'Coffee' })
+    await expect(row).toBeVisible()
+    await expect(row.getByText(/99\.50/)).toBeVisible()
   })
 })

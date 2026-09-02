@@ -3,9 +3,11 @@
 import { useState } from 'react'
 import { motion, useMotionValue, useTransform, animate } from 'framer-motion'
 import { useDrag } from '@use-gesture/react'
-import { Trash2 } from 'lucide-react'
+import { Pencil, Trash2 } from 'lucide-react'
 import { formatINR } from '@/lib/utils/currency'
 import { formatTime } from '@/lib/utils/date'
+import { EmojiTile } from '@/components/ui/emoji-tile'
+import { cn } from '@/lib/utils'
 import type { Transaction } from '@/lib/api/transactions'
 import type { Category } from '@/lib/api/categories'
 
@@ -18,6 +20,14 @@ interface TransactionItemProps {
 
 const SWIPE_THRESHOLD = 80
 
+/**
+ * One row of the transaction table.
+ *
+ * From `md` up it is a five-column row with hover edit/delete buttons. Below
+ * that the time, category and action columns are dropped and the time and
+ * category fold into a subline under the note, leaving swipe-to-delete as the
+ * only way to remove a row on a phone — which is why the gesture stays.
+ */
 export function TransactionItem({
   transaction,
   category,
@@ -39,8 +49,7 @@ export function TransactionItem({
         return
       }
       if (last) {
-        const shouldDelete =
-          mx < -SWIPE_THRESHOLD || (vx > 0.5 && dx < 0)
+        const shouldDelete = mx < -SWIPE_THRESHOLD || (vx > 0.5 && dx < 0)
         if (shouldDelete && onDelete) {
           animate(x, -400, { duration: 0.18, onComplete: () => onDelete(transaction) })
         } else {
@@ -49,27 +58,24 @@ export function TransactionItem({
         }
       }
     },
-    { axis: 'x', filterTaps: true, pointer: { capture: false } }
+    { axis: 'x', filterTaps: true, pointer: { capture: false } },
   )
 
-  function handleClick() {
+  function handleOpen() {
     if (!dragging && onEdit) onEdit(transaction)
   }
 
-  const amountText = formatINR(transaction.amount)
-  const amountClass = transaction.isIncome
-    ? 'text-[color:var(--success,#22c55e)]'
-    : 'text-[var(--destructive)]'
-
   const emoji = category?.emoji ?? '💸'
-  const color = category?.color ?? '#6b7280'
+  const colour = category?.color ?? '#6b7280'
   const label = transaction.note?.trim() || category?.name || 'Transaction'
+  const time = formatTime(transaction.date)
 
   return (
     <div className="relative overflow-hidden select-none">
-      {/* Delete background */}
+      {/* Swipe-to-delete backdrop. pointer-events-none is load-bearing: it
+          otherwise sits over the row and swallows the click that opens it. */}
       <motion.div
-        className="absolute inset-0 flex items-center justify-end pr-6 bg-[var(--destructive)] text-[var(--destructive-foreground,white)] pointer-events-none"
+        className="pointer-events-none absolute inset-0 flex items-center justify-end bg-destructive pr-6 text-destructive-foreground"
         style={{ opacity: bgOpacity }}
         aria-hidden
       >
@@ -80,27 +86,62 @@ export function TransactionItem({
         {...(bind() as React.ComponentProps<typeof motion.div>)}
         data-testid={`transaction-${transaction.id}`}
         style={{ x, touchAction: 'pan-y' }}
-        onClick={handleClick}
-        className="flex items-center gap-3 px-4 py-3 bg-[var(--card)] border-b border-[var(--border)] cursor-pointer"
+        onClick={handleOpen}
+        className="group flex min-h-[var(--row-h)] cursor-pointer items-center gap-3.5 border-b border-border bg-card px-4 hover:bg-muted md:gap-3.5"
       >
-        <span
-          aria-hidden
-          className="w-9 h-9 flex items-center justify-center rounded-full flex-shrink-0 text-base"
-          style={{ backgroundColor: color + '20', color }}
-        >
-          {emoji}
+        <span className="hidden w-[74px] shrink-0 font-mono text-[11.5px] text-muted-foreground md:block">
+          {time}
         </span>
-        <div className="flex flex-col flex-1 min-w-0">
-          <span className="text-sm font-medium text-[var(--foreground)] truncate">
-            {label}
+
+        <EmojiTile emoji={emoji} colour={colour} shape="round" size="md" />
+
+        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <span className="truncate text-[13.5px] font-medium">{label}</span>
+          {/* The dropped columns, folded back in for mobile. */}
+          <span className="truncate text-[11px] text-muted-foreground md:hidden">
+            {time}
+            {category?.name ? ` · ${category.name}` : ''}
           </span>
-          <span className="text-xs text-[var(--muted-foreground)]">
-            {formatTime(transaction.date)}
-          </span>
-        </div>
-        <span className={`text-sm font-semibold ${amountClass}`}>
+        </span>
+
+        <span className="hidden w-[130px] shrink-0 truncate text-xs text-muted-foreground md:block">
+          {category?.name ?? ''}
+        </span>
+
+        <span
+          className={cn(
+            'shrink-0 text-right font-mono text-sm font-semibold whitespace-nowrap',
+            'min-w-[86px] md:min-w-[112px]',
+            transaction.isIncome ? 'text-income' : 'text-expense',
+          )}
+        >
           {transaction.isIncome ? '+' : '−'}
-          {amountText}
+          {formatINR(transaction.amount)}
+        </span>
+
+        <span className="hidden w-[68px] shrink-0 justify-end gap-0.5 md:flex">
+          <button
+            type="button"
+            aria-label={`Edit ${label}`}
+            onClick={(e) => {
+              e.stopPropagation()
+              onEdit?.(transaction)
+            }}
+            className="flex h-[30px] w-[30px] cursor-pointer items-center justify-center rounded-lg text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:bg-background hover:text-foreground focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-ring"
+          >
+            <Pencil className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            aria-label={`Delete ${label}`}
+            onClick={(e) => {
+              e.stopPropagation()
+              onDelete?.(transaction)
+            }}
+            className="flex h-[30px] w-[30px] cursor-pointer items-center justify-center rounded-lg text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:bg-destructive hover:text-destructive-foreground focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-ring"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
         </span>
       </motion.div>
     </div>

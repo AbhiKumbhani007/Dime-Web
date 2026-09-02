@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, act, within } from '@testing-library/react'
 import { renderHook } from '@testing-library/react'
 
 // ─── Mocks ─────────────────────────────────────────────────────────────────
@@ -163,7 +163,10 @@ describe('TransactionList', () => {
       expect(screen.getByText('Pizza')).toBeInTheDocument()
     })
     expect(screen.getAllByText('🍔').length).toBeGreaterThan(0)
-    expect(screen.getByText(/240/)).toBeInTheDocument()
+    // The amount now appears twice: once on the row, once in the day-group
+    // total header. Scope to the row so the assertion stays unambiguous.
+    const row = screen.getByTestId(`transaction-${tx.id}`)
+    expect(within(row).getByText(/240/)).toBeInTheDocument()
   })
 
   // ─── Empty state ────────────────────────────────────────────────────────

@@ -15,8 +15,8 @@ import { motion } from 'framer-motion'
 import { formatINRCompact, formatINR } from '@/lib/utils/currency'
 import type { ByPeriodResult } from '@/lib/api/analytics'
 
-const INCOME_COLOUR = '#22c55e'
-const EXPENSE_COLOUR = '#ef4444'
+const INCOME_COLOUR = 'var(--income)'
+const EXPENSE_COLOUR = 'var(--expense)'
 
 interface IncomeExpenseBarChartProps {
   data: ByPeriodResult

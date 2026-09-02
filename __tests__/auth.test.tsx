@@ -50,8 +50,8 @@ describe('Login form', () => {
 
     await userEvent.clear(screen.getByLabelText(/email/i))
     await userEvent.type(screen.getByLabelText(/email/i), 'test@example.com')
-    await userEvent.clear(screen.getByLabelText(/password/i))
-    await userEvent.type(screen.getByLabelText(/password/i), 'short')
+    await userEvent.clear(screen.getByLabelText('Password'))
+    await userEvent.type(screen.getByLabelText('Password'), 'short')
     fireEvent.click(screen.getByRole('button', { name: /sign in/i }))
 
     await waitFor(() => {
@@ -66,7 +66,7 @@ describe('Login form', () => {
     render(<LoginPage />)
 
     await userEvent.type(screen.getByLabelText(/email/i), 'not-an-email')
-    await userEvent.type(screen.getByLabelText(/password/i), 'validpassword')
+    await userEvent.type(screen.getByLabelText('Password'), 'validpassword')
     fireEvent.click(screen.getByRole('button', { name: /sign in/i }))
 
     await waitFor(() => {

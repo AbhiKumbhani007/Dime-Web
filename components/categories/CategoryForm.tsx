@@ -111,8 +111,8 @@ export function CategoryForm({ open, onOpenChange, category, onSuccess }: Catego
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
-        side="bottom"
-        className="max-h-[85vh] overflow-y-auto rounded-t-2xl"
+        side="right"
+        className="scrollbar-thin w-full overflow-y-auto sm:max-w-[420px] sm:rounded-l-2xl"
       >
         <SheetHeader className="mb-4">
           <SheetTitle>{isEdit ? 'Edit Category' : 'New Category'}</SheetTitle>

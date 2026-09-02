@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { act, render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 // Mock next/navigation
@@ -82,6 +82,7 @@ import { BudgetForm } from '@/components/budgets/BudgetForm'
 import { BudgetDonutSummary } from '@/components/budgets/BudgetDonutSummary'
 import { DeleteBudgetDialog } from '@/components/budgets/DeleteBudgetDialog'
 import BudgetsPage from '@/app/(app)/budgets/page'
+import { PageChromeProvider, usePageChromeValue } from '@/components/layout/PageChrome'
 import { budgetHealth, clampPercent } from '@/lib/utils/budgetProgress'
 import type { BudgetWithProgress } from '@/lib/api/budgets'
 
@@ -181,24 +182,26 @@ describe('BudgetCard', () => {
     expect(screen.getByText(/10,000/)).toBeInTheDocument()
   })
 
-  it('uses the green bar below 75%', () => {
+  // Health bands resolve through semantic tokens, not raw palette classes, so
+  // they follow whichever of the six themes is active.
+  it('uses the income bar below 75%', () => {
     render(<BudgetCard budget={makeBudget({ percent: 25 })} onEdit={noop} onDelete={noop} />)
-    expect(screen.getByTestId('budget-progress-bar').className).toContain('bg-green-500')
+    expect(screen.getByTestId('budget-progress-bar').className).toContain('bg-income')
   })
 
-  it('uses the amber bar at 75%', () => {
+  it('uses the warning bar at 75%', () => {
     render(<BudgetCard budget={makeBudget({ percent: 75 })} onEdit={noop} onDelete={noop} />)
-    expect(screen.getByTestId('budget-progress-bar').className).toContain('bg-amber-500')
+    expect(screen.getByTestId('budget-progress-bar').className).toContain('bg-warning-fill')
   })
 
-  it('uses the amber bar at 90%', () => {
+  it('uses the warning bar at 90%', () => {
     render(<BudgetCard budget={makeBudget({ percent: 90 })} onEdit={noop} onDelete={noop} />)
-    expect(screen.getByTestId('budget-progress-bar').className).toContain('bg-amber-500')
+    expect(screen.getByTestId('budget-progress-bar').className).toContain('bg-warning-fill')
   })
 
-  it('uses the red bar above 90%', () => {
+  it('uses the expense bar above 90%', () => {
     render(<BudgetCard budget={makeBudget({ percent: 91 })} onEdit={noop} onDelete={noop} />)
-    expect(screen.getByTestId('budget-progress-bar').className).toContain('bg-red-500')
+    expect(screen.getByTestId('budget-progress-bar').className).toContain('bg-expense')
   })
 
   it('caps the bar width at 100% when overspent', () => {
@@ -248,66 +251,39 @@ describe('BudgetCard', () => {
     expect(bar).toHaveAttribute('aria-valuemax', '100')
   })
 
-  it('opens the menu and fires onEdit', async () => {
+  // The kebab menu and its 500ms long-press are gone. The design puts edit and
+  // delete directly on the card, always visible — a hover-revealed or
+  // long-pressed control is a poor primary action on a touch device, and this
+  // removes a hidden interaction nothing signposted.
+  it('fires onEdit from the edit button', async () => {
     const onEdit = vi.fn()
     const user = userEvent.setup()
     render(<BudgetCard budget={makeBudget()} onEdit={onEdit} onDelete={noop} />)
 
-    await user.click(screen.getByRole('button', { name: /Options for Groceries/ }))
-    await user.click(await screen.findByText('Edit'))
+    await user.click(screen.getByRole('button', { name: 'Edit Groceries' }))
 
     expect(onEdit).toHaveBeenCalledWith(expect.objectContaining({ id: 'budget-1' }))
   })
 
-  it('opens the menu and fires onDelete', async () => {
+  it('fires onDelete from the delete button', async () => {
     const onDelete = vi.fn()
     const user = userEvent.setup()
     render(<BudgetCard budget={makeBudget()} onEdit={noop} onDelete={onDelete} />)
 
-    await user.click(screen.getByRole('button', { name: /Options for Groceries/ }))
-    await user.click(await screen.findByText('Delete'))
+    await user.click(screen.getByRole('button', { name: 'Delete Groceries' }))
 
     expect(onDelete).toHaveBeenCalledWith(expect.objectContaining({ id: 'budget-1' }))
   })
 
-  it('opens the menu after a 500ms long-press', () => {
-    vi.useFakeTimers()
-    try {
-      render(<BudgetCard budget={makeBudget()} onEdit={noop} onDelete={noop} />)
+  it('marks where spending should be by now', () => {
+    // periodStart/periodEnd in the fixture put the budget mid-period, so the
+    // pace marker should sit somewhere inside the bar rather than at an edge.
+    render(<BudgetCard budget={makeBudget()} onEdit={noop} onDelete={noop} />)
 
-      fireEvent.pointerDown(screen.getByTestId('budget-card'))
-      act(() => {
-        vi.advanceTimersByTime(600)
-      })
-
-      // Radix hides the trigger from the a11y tree while the menu is open, so
-      // assert on the menu itself rather than the trigger's aria-expanded.
-      expect(screen.getByRole('menu')).toBeInTheDocument()
-      expect(screen.getByText('Edit')).toBeInTheDocument()
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('does not open the menu when the press is released early', () => {
-    vi.useFakeTimers()
-    try {
-      render(<BudgetCard budget={makeBudget()} onEdit={noop} onDelete={noop} />)
-
-      const card = screen.getByTestId('budget-card')
-      fireEvent.pointerDown(card)
-      act(() => {
-        vi.advanceTimersByTime(200)
-      })
-      fireEvent.pointerUp(card)
-      act(() => {
-        vi.advanceTimersByTime(600)
-      })
-
-      expect(screen.queryByRole('menu')).not.toBeInTheDocument()
-    } finally {
-      vi.useRealTimers()
-    }
+    const bar = screen.getByRole('progressbar')
+    const marker = bar.querySelector('span[aria-hidden]') as HTMLElement | null
+    expect(marker).not.toBeNull()
+    expect(marker!.style.left).toMatch(/^\d+(\.\d+)?%$/)
   })
 })
 
@@ -539,11 +515,35 @@ describe('BudgetsPage', () => {
     expect(screen.getByText(/Could not load budgets/)).toBeInTheDocument()
   })
 
-  it('opens the form from the FAB', async () => {
+  // The create button is no longer rendered by the page. It publishes a
+  // primary action via usePageChrome, and the shell decides whether that
+  // surfaces as a top-bar button (md+) or a FAB (mobile). Assert the contract
+  // the page is actually responsible for: that invoking the published action
+  // opens the form.
+  it('publishes a primary action that opens the form', async () => {
     const user = userEvent.setup()
-    render(<BudgetsPage />)
 
-    await user.click(screen.getByRole('button', { name: 'Add budget' }))
+    // Stands in for the shell: renders whatever the page published, the same
+    // way TopBar and Fab do. Rendering it rather than capturing the value into
+    // an outer variable keeps the assertion on observable behaviour.
+    function ChromeProbe() {
+      const { primaryAction } = usePageChromeValue()
+      if (!primaryAction) return null
+      return (
+        <button type="button" onClick={primaryAction.onClick}>
+          {primaryAction.label}
+        </button>
+      )
+    }
+
+    render(
+      <PageChromeProvider>
+        <BudgetsPage />
+        <ChromeProbe />
+      </PageChromeProvider>,
+    )
+
+    await user.click(await screen.findByRole('button', { name: 'Add budget' }))
 
     expect(await screen.findByText('New Budget')).toBeInTheDocument()
   })

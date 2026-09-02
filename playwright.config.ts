@@ -3,12 +3,16 @@ import { defineConfig, devices } from '@playwright/test'
 /**
  * Playwright config for dime-web E2E.
  *
- * Default run targets mobile-chromium only (the app is mobile-first) and is
- * serialized to a single worker to stay under the backend's 100/min rate
- * limit. To also include the desktop project in a run, set E2E_DESKTOP=1.
+ * The design defines three frames — 412 mobile, 834 tablet, 1440 desktop — and
+ * the shell changes materially at each (bottom nav → sidebar rail → expanded
+ * sidebar). All three run by default so a regression in the viewport nobody is
+ * currently looking at still fails.
+ *
+ * Serialized to a single worker to stay under the backend's 100/min rate limit.
+ * Set E2E_MOBILE_ONLY=1 for a fast inner-loop run.
  */
 
-const includeDesktop = process.env.E2E_DESKTOP === '1'
+const mobileOnly = process.env.E2E_MOBILE_ONLY === '1'
 
 const mobileProject = {
   name: 'mobile-chromium',
@@ -16,9 +20,14 @@ const mobileProject = {
   use: { ...devices['Pixel 7'] },
 }
 
+const tabletProject = {
+  name: 'tablet-chromium',
+  use: { ...devices['Desktop Chrome'], viewport: { width: 834, height: 1050 } },
+}
+
 const desktopProject = {
   name: 'desktop-chromium',
-  use: { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 800 } },
+  use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 940 } },
 }
 
 export default defineConfig({
@@ -44,7 +53,7 @@ export default defineConfig({
     actionTimeout: 5_000,
   },
 
-  projects: includeDesktop ? [mobileProject, desktopProject] : [mobileProject],
+  projects: mobileOnly ? [mobileProject] : [mobileProject, tabletProject, desktopProject],
 
   webServer: [
     {

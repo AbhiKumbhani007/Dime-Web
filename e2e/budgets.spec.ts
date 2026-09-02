@@ -90,7 +90,7 @@ test.describe('Budgets', () => {
     await expect(card.getByText(/10,000/)).toBeVisible()
 
     // 25% → green bar
-    await expect(page.getByTestId('budget-progress-bar')).toHaveClass(/bg-green-500/)
+    await expect(page.getByTestId('budget-progress-bar')).toHaveClass(/bg-income/)
   })
 
   test('an overspent budget shows a red bar and an over-by line', async ({
@@ -121,7 +121,7 @@ test.describe('Budgets', () => {
     await loginViaUI(page, testUser)
     await page.goto('/budgets')
 
-    await expect(page.getByTestId('budget-progress-bar')).toHaveClass(/bg-red-500/)
+    await expect(page.getByTestId('budget-progress-bar')).toHaveClass(/bg-expense/)
     await expect(page.getByText(/Over by/)).toBeVisible()
   })
 
@@ -134,8 +134,8 @@ test.describe('Budgets', () => {
     await loginViaUI(page, testUser)
     await page.goto('/budgets')
 
-    await page.getByRole('button', { name: /Options for Groceries/ }).click()
-    await page.getByRole('menuitem', { name: 'Edit' }).click()
+    // Edit and delete are buttons on the card now, not a kebab menu.
+    await page.getByRole('button', { name: 'Edit Groceries' }).click()
 
     await page.getByLabel('Name').fill('Groceries & household')
     await page.getByRole('button', { name: 'Save' }).click()
@@ -153,9 +153,9 @@ test.describe('Budgets', () => {
     await page.goto('/budgets')
     await expect(page.getByTestId('budget-card')).toHaveCount(1)
 
-    await page.getByRole('button', { name: /Options for Groceries/ }).click()
-    await page.getByRole('menuitem', { name: 'Delete' }).click()
-    await page.getByRole('button', { name: 'Delete' }).click()
+    await page.getByRole('button', { name: 'Delete Groceries' }).click()
+    // Confirm in the AlertDialog.
+    await page.getByRole('alertdialog').getByRole('button', { name: 'Delete' }).click()
 
     await expect(page.getByText('No budgets yet')).toBeVisible()
   })

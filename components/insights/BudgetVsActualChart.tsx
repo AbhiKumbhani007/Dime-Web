@@ -14,8 +14,8 @@ import {
 import { formatINR, formatINRCompact } from '@/lib/utils/currency'
 import type { BudgetVsActualRow } from '@/lib/api/analytics'
 
-const ALLOCATED_COLOUR = '#94a3b8'
-const SPENT_COLOUR = '#6366f1'
+const ALLOCATED_COLOUR = 'var(--chart-budgeted)'
+const SPENT_COLOUR = 'var(--chart-net)'
 
 export function BudgetVsActualChart({ rows }: { rows: BudgetVsActualRow[] }) {
   if (rows.length === 0) {

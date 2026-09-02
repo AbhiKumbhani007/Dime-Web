@@ -158,8 +158,8 @@ export function TransactionForm({
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
-        side="bottom"
-        className="max-h-[90vh] overflow-y-auto rounded-t-2xl"
+        side="right"
+        className="scrollbar-thin w-full overflow-y-auto sm:max-w-[440px] sm:rounded-l-2xl"
       >
         <SheetHeader className="mb-4">
           <SheetTitle>
@@ -335,8 +335,8 @@ export function TransactionForm({
         {/* Mini category picker sheet */}
         <Sheet open={pickerOpen} onOpenChange={setPickerOpen}>
           <SheetContent
-            side="bottom"
-            className="max-h-[60vh] overflow-y-auto rounded-t-2xl"
+            side="right"
+            className="scrollbar-thin w-full overflow-y-auto sm:max-w-[380px] sm:rounded-l-2xl"
           >
             <SheetHeader className="mb-3">
               <SheetTitle>Select category</SheetTitle>

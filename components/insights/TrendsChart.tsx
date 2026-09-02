@@ -16,9 +16,9 @@ import {
 import { formatINR, formatINRCompact } from '@/lib/utils/currency'
 import type { TrendRow } from '@/lib/api/analytics'
 
-const INCOME_COLOUR = '#22c55e'
-const EXPENSE_COLOUR = '#ef4444'
-const NET_COLOUR = '#6366f1'
+const INCOME_COLOUR = 'var(--income)'
+const EXPENSE_COLOUR = 'var(--expense)'
+const NET_COLOUR = 'var(--chart-net)'
 
 /** "2026-08" → "Aug 26" for a compact axis. */
 function shortMonth(month: string): string {

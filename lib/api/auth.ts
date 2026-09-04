@@ -5,6 +5,7 @@ export interface User {
   email: string
   name: string | null
   theme: string
+  createdAt: string
 }
 
 export interface AuthResponse {

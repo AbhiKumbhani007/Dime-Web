@@ -6,6 +6,7 @@ export interface AuthUser {
   email: string
   name: string | null
   theme: string
+  createdAt: string
 }
 
 interface AuthState {

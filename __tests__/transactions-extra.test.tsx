@@ -63,6 +63,27 @@ vi.mock('@/lib/toast', () => ({
   toastSuccess: vi.fn(),
 }))
 
+// Mock templates API + hooks — TransactionForm renders TemplateChipRow and
+// SaveAsTemplatePopover, neither of which this file exercises directly.
+vi.mock('@/lib/api/templates', () => ({
+  getTemplates: vi.fn(),
+  createTemplate: vi.fn(),
+  updateTemplate: vi.fn(),
+  deleteTemplate: vi.fn(),
+}))
+
+vi.mock('@/hooks/useTemplates', () => ({
+  TEMPLATES_KEY: ['templates'],
+  useTemplates: vi.fn(() => ({
+    data: { templates: [] },
+    isLoading: false,
+    error: null,
+  })),
+  useCreateTemplate: vi.fn(() => ({ mutateAsync: vi.fn(), isPending: false })),
+  useUpdateTemplate: vi.fn(() => ({ mutateAsync: vi.fn(), isPending: false })),
+  useDeleteTemplate: vi.fn(() => ({ mutateAsync: vi.fn(), isPending: false })),
+}))
+
 import {
   QueryClient,
   QueryClientProvider,

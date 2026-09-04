@@ -12,12 +12,10 @@ import type { Result } from 'axe-core'
  * to close each item.
  *
  * Currently known (as of 2026-04-19):
- *   - meta-viewport         : user-scalable=no in app/layout.tsx (WCAG 1.4.4)
  *   - color-contrast        : --muted-foreground #7f8591 on #ffffff = 3.7:1
  *                             (--accent) #6366f1 on accent tint = 3.77:1
  */
 const KNOWN_VIOLATIONS = new Set<string>([
-  'meta-viewport',
   'color-contrast',
 ])
 

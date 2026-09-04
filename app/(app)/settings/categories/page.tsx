@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -8,6 +8,7 @@ import { CategoryChip } from '@/components/categories/CategoryChip'
 import { CategoryForm } from '@/components/categories/CategoryForm'
 import { DeleteCategoryDialog } from '@/components/categories/DeleteCategoryDialog'
 import { useCategories } from '@/hooks/useCategories'
+import { usePageChrome } from '@/components/layout/PageChrome'
 import type { Category } from '@/lib/api/categories'
 
 export default function CategoriesPage() {
@@ -16,6 +17,8 @@ export default function CategoriesPage() {
   const [formOpen, setFormOpen] = useState(false)
   const [editingCategory, setEditingCategory] = useState<Category | undefined>(undefined)
   const [deletingCategory, setDeletingCategory] = useState<Category | null>(null)
+
+  usePageChrome(useMemo(() => ({ title: 'Categories' }), []))
 
   function handleAdd() {
     setEditingCategory(undefined)
@@ -36,10 +39,11 @@ export default function CategoriesPage() {
   const customCategories = categories.filter((c) => !c.isDefault)
 
   return (
-    <div className="flex flex-col p-6 gap-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-[var(--foreground)]">Categories</h2>
+    <div className="flex flex-col gap-(--gap) p-(--pad-page)">
+      {/* The page title now lives in the top bar via usePageChrome above; this
+          row keeps only the Add action, which the settings-page redesign
+          left in place rather than moving into the chrome's primaryAction. */}
+      <div className="flex items-center justify-end">
         <Button size="sm" onClick={handleAdd} className="gap-1.5">
           <Plus className="h-4 w-4" />
           Add

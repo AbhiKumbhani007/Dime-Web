@@ -12,6 +12,10 @@ interface PreferencesState {
   navOpen: boolean
   setNavOpen: (open: boolean) => void
   toggleNav: () => void
+
+  /** Disables the page-fade transition in `app/(app)/layout.tsx`. Default off. */
+  reducedMotion: boolean
+  setReducedMotion: (reducedMotion: boolean) => void
 }
 
 /**
@@ -30,6 +34,9 @@ export const usePreferencesStore = create<PreferencesState>()(
       navOpen: true,
       setNavOpen: (navOpen) => set({ navOpen }),
       toggleNav: () => set((s) => ({ navOpen: !s.navOpen })),
+
+      reducedMotion: false,
+      setReducedMotion: (reducedMotion) => set({ reducedMotion }),
     }),
     { name: 'paisa-preferences' },
   ),

@@ -22,8 +22,11 @@ import { useCategories } from '@/hooks/useCategories'
 import { useCreateTransaction, useUpdateTransaction } from '@/hooks/useTransactions'
 import { formatDateLong } from '@/lib/utils/date'
 import { parseAmount } from '@/lib/utils/currency'
+import { TemplateChipRow } from '@/components/templates/TemplateChipRow'
+import { SaveAsTemplatePopover } from '@/components/templates/SaveAsTemplatePopover'
 import type { Transaction } from '@/lib/api/transactions'
 import type { Category } from '@/lib/api/categories'
+import type { Template } from '@/lib/api/templates'
 
 const transactionSchema = z.object({
   amount: z
@@ -57,6 +60,7 @@ export function TransactionForm({
   const [amountText, setAmountText] = useState('')
   const [pickerOpen, setPickerOpen] = useState(false)
   const [datePickerOpen, setDatePickerOpen] = useState(false)
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null)
 
   const { data: categoriesData } = useCategories()
   const categories = categoriesData?.categories ?? []
@@ -89,6 +93,8 @@ export function TransactionForm({
   const selectedCategoryId = watch('categoryId')
   const selectedIsIncome = watch('isIncome')
   const selectedDate = watch('date')
+  const watchedAmount = watch('amount')
+  const watchedNote = watch('note')
   const selectedCategory: Category | undefined = categories.find(
     (c) => c.id === selectedCategoryId
   )
@@ -112,10 +118,23 @@ export function TransactionForm({
           '',
       })
       setAmountText(initialAmount > 0 ? String(initialAmount) : '')
+      setSelectedTemplateId(null)
       setApiError(null)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, transaction])
+
+  /** A template chip was tapped — prefill the form with its saved values. */
+  function handleTemplateSelect(template: Template) {
+    setValue('categoryId', template.categoryId ?? '', { shouldValidate: true })
+    setValue('isIncome', template.isIncome)
+    setValue('note', template.note ?? '')
+    if (template.amount !== null) {
+      setValue('amount', template.amount, { shouldValidate: true })
+      setAmountText(String(template.amount))
+    }
+    setSelectedTemplateId(template.id)
+  }
 
   async function onSubmit(values: TransactionFormValues) {
     setApiError(null)
@@ -138,6 +157,7 @@ export function TransactionForm({
           note: values.note || undefined,
           isIncome: values.isIncome,
           categoryId: values.categoryId,
+          ...(selectedTemplateId ? { templateId: selectedTemplateId } : {}),
         })
       }
       onSuccess?.()
@@ -168,6 +188,12 @@ export function TransactionForm({
         </SheetHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-5">
+          {/* Template chips — only for new transactions; tapping one prefills
+              the fields below and is tracked via templateId on submit. */}
+          {!isEdit && (
+            <TemplateChipRow selectedId={selectedTemplateId} onSelect={handleTemplateSelect} />
+          )}
+
           {/* Income / Expense toggle */}
           <div className="grid grid-cols-2 gap-1 p-1 bg-[var(--muted)] rounded-lg">
             <button
@@ -309,26 +335,38 @@ export function TransactionForm({
             <p className="text-sm text-[var(--destructive)]">{apiError}</p>
           )}
 
-          <SheetFooter className="flex flex-row gap-2 pt-2">
-            <Button
-              type="button"
-              variant="outline"
-              className="flex-1"
-              onClick={() => onOpenChange(false)}
-              disabled={isLoading}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" className="flex-1" disabled={isLoading}>
-              {isLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Saving…
-                </>
-              ) : (
-                'Save'
-              )}
-            </Button>
+          <SheetFooter className="flex flex-col gap-2 pt-2">
+            <div className="flex justify-start">
+              <SaveAsTemplatePopover
+                values={{
+                  amount: watchedAmount,
+                  categoryId: selectedCategoryId,
+                  note: watchedNote,
+                  isIncome: selectedIsIncome,
+                }}
+              />
+            </div>
+            <div className="flex flex-row gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1"
+                onClick={() => onOpenChange(false)}
+                disabled={isLoading}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" className="flex-1" disabled={isLoading}>
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Saving…
+                  </>
+                ) : (
+                  'Save'
+                )}
+              </Button>
+            </div>
           </SheetFooter>
         </form>
 

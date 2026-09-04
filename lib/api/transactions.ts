@@ -33,6 +33,12 @@ export interface CreateTransactionInput {
   note?: string
   isIncome: boolean
   categoryId: string
+  /**
+   * Optional template this transaction was created from. Server-side this is
+   * a write-time signal only — it bumps the template's usageCount/lastUsedAt
+   * and is never persisted on the transaction itself.
+   */
+  templateId?: string
 }
 
 export type UpdateTransactionInput = Partial<CreateTransactionInput>

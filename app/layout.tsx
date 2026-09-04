@@ -4,6 +4,7 @@ import './globals.css'
 import { Toaster } from 'sonner'
 import { ThemeProvider } from '@/components/providers/ThemeProvider'
 import { QueryProvider } from '@/components/providers/QueryProvider'
+import { ServiceWorkerRegister } from '@/components/providers/ServiceWorkerRegister'
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -24,14 +25,15 @@ export const metadata: Metadata = {
     statusBarStyle: 'default',
     title: 'Paisa',
   },
+  icons: {
+    apple: '/icons/icon-192.png',
+  },
 }
 
 export const viewport: Viewport = {
   themeColor: '#4f46e5',
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
 }
 
 export default function RootLayout({
@@ -50,6 +52,7 @@ export default function RootLayout({
         <ThemeProvider>
           <QueryProvider>{children}</QueryProvider>
           <Toaster richColors position="top-center" />
+          <ServiceWorkerRegister />
         </ThemeProvider>
       </body>
     </html>

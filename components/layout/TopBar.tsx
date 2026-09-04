@@ -38,7 +38,7 @@ export function TopBar({ title, meta, onBack, primaryAction, rightAction }: TopB
           type="button"
           onClick={onBack}
           aria-label="Back"
-          className="-ml-2 flex h-[38px] w-[38px] shrink-0 cursor-pointer items-center justify-center rounded-[10px] text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
+          className="-ml-2 flex h-[38px] w-[38px] shrink-0 cursor-pointer items-center justify-center rounded-[10px] text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring md:hidden"
         >
           <ChevronLeft className="h-5 w-5" />
         </button>

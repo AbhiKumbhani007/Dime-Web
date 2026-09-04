@@ -1,9 +1,17 @@
-export default function PersonDetailPage({ params }: { params: { personId: string } }) {
-  return (
-    <main className="flex flex-1 flex-col items-center justify-center p-6">
-      <h1 className="text-2xl font-semibold">Person Detail</h1>
-      <p className="mt-2 text-[var(--muted-foreground)]">ID: {params.personId}</p>
-      <p className="mt-1 text-[var(--muted-foreground)]">Coming soon — F11 Ledger Entries</p>
-    </main>
-  )
+import { redirect } from 'next/navigation'
+
+/**
+ * Deep-link redirect only — the real two-pane UI lives at `/ledger`, with the
+ * selected person in the `person` search param (not the path). Keeping
+ * selection out of the path means `pathname` never changes when a person is
+ * selected, so the app shell's `AnimatePresence key={pathname}` (see
+ * `app/(app)/layout.tsx`) never replays its page-fade for a pane swap.
+ */
+export default async function LedgerPersonRedirect({
+  params,
+}: {
+  params: Promise<{ personId: string }>
+}) {
+  const { personId } = await params
+  redirect(`/ledger?person=${personId}`)
 }

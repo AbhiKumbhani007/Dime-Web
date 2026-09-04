@@ -6,7 +6,7 @@ import { NAV_ITEMS } from '@/lib/nav'
 import { usePreferencesStore } from '@/store/usePreferencesStore'
 
 /** Elements that swallow single-key shortcuts because the user is typing. */
-function isTypingTarget(target: EventTarget | null): boolean {
+export function isTypingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false
   const tag = target.tagName.toLowerCase()
   return tag === 'input' || tag === 'textarea' || tag === 'select' || target.isContentEditable

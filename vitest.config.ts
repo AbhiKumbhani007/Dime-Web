@@ -36,7 +36,10 @@ export default defineConfig({
       // Next.js's webpack build resolves `server-only` to this same no-op
       // file via the `react-server` condition; Vitest doesn't set that
       // condition, so without this alias every lib/server/* import throws.
-      'server-only': path.resolve(__dirname, 'node_modules/server-only/empty.js'),
+      'server-only': path.resolve(
+        __dirname,
+        'node_modules/server-only/empty.js'
+      ),
     },
   },
 })

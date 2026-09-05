@@ -33,25 +33,39 @@ describe('checkRateLimit', () => {
   })
 
   it('allows a request under the limit', async () => {
-    vi.mocked(prisma.rateLimitBucket.upsert).mockResolvedValue({ count: 5 } as never)
+    vi.mocked(prisma.rateLimitBucket.upsert).mockResolvedValue({
+      count: 5,
+    } as never)
 
-    await expect(checkRateLimit('global:203.0.113.4', 100, 60)).resolves.toBe(true)
+    await expect(checkRateLimit('global:203.0.113.4', 100, 60)).resolves.toBe(
+      true
+    )
   })
 
   it('allows a request exactly at the limit', async () => {
-    vi.mocked(prisma.rateLimitBucket.upsert).mockResolvedValue({ count: 100 } as never)
+    vi.mocked(prisma.rateLimitBucket.upsert).mockResolvedValue({
+      count: 100,
+    } as never)
 
-    await expect(checkRateLimit('global:203.0.113.4', 100, 60)).resolves.toBe(true)
+    await expect(checkRateLimit('global:203.0.113.4', 100, 60)).resolves.toBe(
+      true
+    )
   })
 
   it('blocks a request over the limit', async () => {
-    vi.mocked(prisma.rateLimitBucket.upsert).mockResolvedValue({ count: 101 } as never)
+    vi.mocked(prisma.rateLimitBucket.upsert).mockResolvedValue({
+      count: 101,
+    } as never)
 
-    await expect(checkRateLimit('global:203.0.113.4', 100, 60)).resolves.toBe(false)
+    await expect(checkRateLimit('global:203.0.113.4', 100, 60)).resolves.toBe(
+      false
+    )
   })
 
   it('upserts on (key, windowStart) with an atomic increment, windowStart truncated to the window boundary', async () => {
-    vi.mocked(prisma.rateLimitBucket.upsert).mockResolvedValue({ count: 1 } as never)
+    vi.mocked(prisma.rateLimitBucket.upsert).mockResolvedValue({
+      count: 1,
+    } as never)
     const before = Date.now()
 
     await checkRateLimit('global:203.0.113.4', 100, 60)
@@ -71,17 +85,22 @@ describe('checkRateLimit', () => {
       count: 1,
     })
     expect(call.where.key_windowStart.windowStart.getTime() % 60_000).toBe(0)
-    expect(call.where.key_windowStart.windowStart.getTime()).toBeLessThanOrEqual(before)
+    expect(
+      call.where.key_windowStart.windowStart.getTime()
+    ).toBeLessThanOrEqual(before)
   })
 
   it('opportunistically deletes buckets older than 1 hour on each check', async () => {
-    vi.mocked(prisma.rateLimitBucket.upsert).mockResolvedValue({ count: 1 } as never)
+    vi.mocked(prisma.rateLimitBucket.upsert).mockResolvedValue({
+      count: 1,
+    } as never)
     const before = Date.now()
 
     await checkRateLimit('global:203.0.113.4', 100, 60)
 
     expect(prisma.rateLimitBucket.deleteMany).toHaveBeenCalledTimes(1)
-    const call = vi.mocked(prisma.rateLimitBucket.deleteMany).mock.calls[0][0] as {
+    const call = vi.mocked(prisma.rateLimitBucket.deleteMany).mock
+      .calls[0][0] as {
       where: { windowStart: { lt: Date } }
     }
     const staleness = before - call.where.windowStart.lt.getTime()

@@ -37,7 +37,9 @@ describe('authenticate', () => {
   it('returns {userId, email} for a valid bearer token', async () => {
     const token = await signToken({ userId: 'user_1', email: 'a@example.com' })
 
-    await expect(authenticate(requestWithAuth(`Bearer ${token}`))).resolves.toEqual({
+    await expect(
+      authenticate(requestWithAuth(`Bearer ${token}`))
+    ).resolves.toEqual({
       userId: 'user_1',
       email: 'a@example.com',
     })
@@ -50,7 +52,9 @@ describe('authenticate', () => {
   it('throws AuthError when the header is not a Bearer token', async () => {
     const token = await signToken({ userId: 'user_1', email: 'a@example.com' })
 
-    await expect(authenticate(requestWithAuth(token))).rejects.toThrow(AuthError)
+    await expect(authenticate(requestWithAuth(token))).rejects.toThrow(
+      AuthError
+    )
   })
 
   it('throws AuthError for a token signed with the wrong secret', async () => {
@@ -59,7 +63,9 @@ describe('authenticate', () => {
       { secret: 'a-completely-different-secret-of-32-chars' }
     )
 
-    await expect(authenticate(requestWithAuth(`Bearer ${token}`))).rejects.toThrow(AuthError)
+    await expect(
+      authenticate(requestWithAuth(`Bearer ${token}`))
+    ).rejects.toThrow(AuthError)
   })
 
   it('throws AuthError for an expired token', async () => {
@@ -68,12 +74,16 @@ describe('authenticate', () => {
       { expiresIn: '-1s' }
     )
 
-    await expect(authenticate(requestWithAuth(`Bearer ${token}`))).rejects.toThrow(AuthError)
+    await expect(
+      authenticate(requestWithAuth(`Bearer ${token}`))
+    ).rejects.toThrow(AuthError)
   })
 
   it('throws AuthError when the payload is missing userId/email', async () => {
     const token = await signToken({ email: 'a@example.com' })
 
-    await expect(authenticate(requestWithAuth(`Bearer ${token}`))).rejects.toThrow(AuthError)
+    await expect(
+      authenticate(requestWithAuth(`Bearer ${token}`))
+    ).rejects.toThrow(AuthError)
   })
 })

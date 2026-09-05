@@ -29,6 +29,19 @@ Things worth knowing before touching this codebase. `ticket`/`tdd` read this bef
   other `*.service.ts` takes `prisma` as a plain argument (framework-agnostic, copies near-verbatim);
   `auth.service.ts` takes `fastify: FastifyInstance` and calls `fastify.prisma.*`/`fastify.jwt.sign()`
   directly throughout. It needs a real rewrite during the port, not a copy.
+- **`server-only` throws under Vitest unless aliased.** Next.js's webpack build resolves the
+  `server-only` package to its no-op `empty.js` via the `react-server` resolve condition; Vitest
+  doesn't set that condition by default, so every `lib/server/*` file's `import 'server-only'` throws
+  immediately under test. Fixed once, globally, via `resolve.alias` in `vitest.config.ts` mapping
+  `server-only` → `node_modules/server-only/empty.js`. No per-test-file workaround needed.
+- **`jose`'s WebCrypto key handling fails under jsdom** — `SignJWT`/`jwtVerify` throw
+  `"Key for the HS256 algorithm must be one of type CryptoKey, KeyObject, JSON Web Key, or
+  Uint8Array. Received an instance of Uint8Array"` when run in Vitest's default `jsdom` environment,
+  because jsdom's `Uint8Array`/crypto globals are a different realm than Node's and fail jose's
+  `instanceof` checks. `lib/server/**` code targets the Node runtime anyway (per `tdd.md`'s Context
+  table), so any test file that imports `jose` (or anything that transitively does) needs
+  `// @vitest-environment node` as its first line — this repo has no global `node` environment
+  carve-out, so it's per-file, not automatic.
 
 ## Tooling
 

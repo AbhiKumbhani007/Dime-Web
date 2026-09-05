@@ -1,0 +1,324 @@
+# TDD — Phase 001: Merge dime-api into dime-web
+
+**Source** `docs/inputs/prd.md` → `docs/decisions/001-merge-backend-into-nextjs.md` · `docs/inputs/sow.md#phase-boundary-001-merge-backend-into-nextjs`
+**Status** draft (2026-09-04)
+**Verified against** the live `dime-api` dev server (`npm run dev`, :4000) and the live `dime_dev` PostgreSQL database, 2026-09-04 — `prisma migrate status` confirmed zero schema drift (2 migrations applied, database up to date) before any contract was written down. Fixtures committed under `phases/001-merge-backend-into-nextjs/fixtures/` (see `fixtures/README.md` for what each one corrected versus static-analysis assumptions).
+
+## Summary
+
+Fold the standalone `dime-api` Fastify backend directly into `dime-web` as Next.js App Router Route Handlers under `app/api/*`, backed by ported service/schema logic under `lib/server/*`, so the product ships as one deployable on Kuberns with no separately-hosted backend process. The approach is a module-by-module port against the **same physical PostgreSQL database** `dime-api` already uses (not a data migration), keeping `dime-api` running as a live fallback throughout.
+
+## Scope
+
+**In.**
+- All 8 `dime-api` modules ported as Route Handlers: health, auth, categories, transactions, budgets, analytics, ledger, templates, csv — full parity with today's endpoints, request/response shapes, and status codes (exceptions named explicitly below).
+- `dime-web`'s own `prisma/schema.prisma` + copied migration history, Prisma singleton for the Next.js runtime, pointed at the **same** database `dime-api` uses today.
+- Shared plumbing: auth verification helper, a Postgres-backed rate limiter, a single error-response helper (standardizing the three existing error shapes into one), CSV export/import rebuilt on Web APIs.
+- Standardizing ported Zod schemas on v4 (frontend's existing version).
+- Updating `dime-web`'s own client code where it's provably coupled to the old transport: `lib/api.ts`'s base URL, `SessionProvider.tsx`'s refresh URL, `AccountForm.tsx` (+ its test) for the error-shape fix, `e2e/helpers/api.ts` and `playwright.config.ts` once cutover is verified.
+
+**Out.**
+- Any change to product behavior or existing feature functionality (per `docs/inputs/sow.md`).
+- Switching auth transport to cookies (bearer JWT is kept — user's explicit choice, recorded in the decision doc).
+- Archiving or deleting `dime-api` (kept running as a live fallback for the whole transition; its fate is a follow-up decision after full cutover is verified).
+- Enabling Kuberns horizontal scaling (the Postgres-backed rate limiter is built so this phase doesn't block that decision later, but turning it on is not part of this phase).
+- Cutting tasks (`tasks.md`) — that's the `cut` skill, after a person reads this document.
+
+**Depends on.**
+- The shared Postgres connection string (`DATABASE_URL`) and `JWT_ACCESS_SECRET` value that `dime-api`'s `.env` already holds, added to `dime-web`'s local env (`.env.local`) and to its Kuberns environment config. Reusing the **same** `JWT_ACCESS_SECRET` value (not a new one) means access tokens issued by either system stay verifiable by both during the transition — this is a soft dependency worth keeping, not a hard one, since access tokens are short-lived (15 min) and dime-api stays up as fallback regardless.
+- `setup` (already run this phase — see `AGENTS.md`, `LEARNINGS.md`) and `docs/decisions/001-merge-backend-into-nextjs.md` (already written).
+
+## Context
+
+| | |
+|---|---|
+| Language / runtime | TypeScript, Node.js runtime (not Edge — Prisma + `node:crypto` HMAC in the CSV preview token both require it) |
+| Primary dependencies | Next.js 16.2.2 (already installed), Prisma 6 (new to `dime-web`, pinned to match `dime-api`'s installed version — check via `npm view prisma version` at implementation time per the `tdd` skill's own "pin against the registry" rule, not copied from memory), `jose` (new — JWT signing/verification, replacing `@fastify/jwt`), `bcryptjs` (new, copied from `dime-api`), `zod` ^4.3.6 (already installed) |
+| Storage | The **existing** `dime_dev` PostgreSQL database (same instance `dime-api` uses today — not a new database, not a data migration) |
+| Testing | Vitest (unit — service-layer tests port near-verbatim, route-level tests rewritten against Route Handlers directly), Playwright (e2e — existing specs, retargeted at `dime-web`'s own routes once each module is verified) |
+| Deploy target | Kuberns — persistent Node.js server, Node runtime throughout, no Edge routes in this phase |
+| Performance goals | p95 < 300ms for an authenticated read on Kuberns (no prior number existed for this app; set here as the anchor this phase can be wrong about — personal-finance-app read volumes are low, this is a conservative ceiling, not a stretch target). CSV export: full in-memory buffering is fine up to the existing 500-row cursor-page cap; no numeric ceiling was ever set upstream on total export size — carried over unchanged, not tightened or loosened in this phase. |
+| Constraints | Bearer-JWT auth transport (fixed by decision doc, not chosen fresh here). Single Postgres database shared with `dime-api` for the duration of the transition (fixed by the module-by-module sequencing itself — see Architecture). |
+
+## Project structure
+
+**Organising principle:** by feature, with shared plumbing by layer — mirrors `dime-api`'s existing `modules/<name>/{routes,service,schema}` shape as closely as Next.js's routing conventions allow, and matches `dime-web`'s existing `lib/api/<domain>.ts` per-domain organization on the frontend side. Rejected alternative: a flat `app/api/` with no `lib/server/` split — loses the framework-agnostic service layer that is the single biggest reuse win of this port (every service function ported near-verbatim takes `prisma` as a plain argument, exactly because it doesn't know about Fastify or Next.js).
+
+The real tree this phase creates or changes (every file — including tests and fixtures):
+
+```text
+dime-web/
+  prisma/
+    schema.prisma                                new — copied from dime-api/prisma/schema.prisma, + RateLimitBucket model (see Data model)
+    migrations/
+      20260405104227_init/                        new — copied verbatim from dime-api/prisma/migrations/
+      20260902210852_template_emoji_category_usage/  new — copied verbatim
+      <NNNNNNNNNNNNNN>_add_rate_limit_bucket/       new — this phase's own migration, additive only
+
+  lib/server/
+    prisma.ts                                    new — globalThis-cached PrismaClient singleton
+    errorResponse.ts                              new — apiError(status, code, message) -> NextResponse.json({error:{code,message}}, {status})
+    rateLimit.ts                                  new — checkRateLimit(key, limit, windowSeconds) against RateLimitBucket
+    httpError.ts                                  new — copied verbatim from dime-api/src/lib/httpError.ts
+    defaultCategories.ts                          new — copied verbatim from dime-api/src/lib/defaultCategories.ts
+    common.schema.ts                              new — copied from dime-api/src/lib/common.schema.ts, Zod v3->v4 syntax updated
+    auth/
+      authenticate.ts                             new — plain helper replacing hooks/authenticate.ts's Fastify preHandler; verifies bearer token via jose, returns {userId,email} or throws a typed AuthError
+      auth.service.ts                             new — rewritten from dime-api/src/modules/auth/auth.service.ts (fastify.prisma/fastify.jwt calls replaced with injected prisma + jose)
+      auth.schema.ts                               new — copied from dime-api/src/modules/auth/auth.schema.ts, Zod v4
+    categories/
+      categories.service.ts                       new — copied verbatim from dime-api/src/modules/categories/categories.service.ts
+      categories.schema.ts                        new — copied, Zod v4
+    transactions/
+      transactions.service.ts                     new — copied verbatim
+      transactions.schema.ts                      new — copied, Zod v4
+    budgets/
+      budgets.service.ts                          new — copied verbatim
+      budgets.period.ts                           new — copied verbatim (pure logic)
+      budgets.schema.ts                           new — copied, Zod v4
+    analytics/
+      analytics.service.ts                        new — copied verbatim
+      analytics.period.ts                         new — copied verbatim (pure logic)
+    ledger/
+      ledger.service.ts                           new — copied verbatim
+      ledger.balance.ts                            new — copied verbatim (pure logic)
+      ledger.schema.ts                             new — copied, Zod v4
+    templates/
+      templates.service.ts                        new — copied verbatim
+      templates.schema.ts                          new — copied, Zod v4
+    csv/
+      csv.service.ts                               new — copied verbatim (exportRows stays an async generator; only the route layer drains it)
+      csv.parse.ts                                 new — copied verbatim (pure logic)
+      csv.token.ts                                 new — copied verbatim (node:crypto HMAC, Node runtime only)
+      csv.schema.ts                                new — copied, Zod v4
+
+  app/api/
+    health/route.ts                                new — GET; also see next.config.ts rewrite below
+    auth/
+      register/route.ts                           new — POST
+      login/route.ts                               new — POST
+      refresh/route.ts                             new — POST
+      logout/route.ts                              new — POST
+      me/route.ts                                  new — GET, PATCH, DELETE
+      me/password/route.ts                          new — PATCH
+      google/route.ts                               new — POST
+    categories/
+      route.ts                                     new — GET, POST
+      [id]/route.ts                                 new — PATCH, DELETE
+    transactions/
+      route.ts                                     new — GET, POST
+      [id]/route.ts                                 new — GET, PATCH, DELETE
+    budgets/
+      route.ts                                     new — GET, POST
+      [id]/route.ts                                 new — PATCH, DELETE
+      [id]/progress/route.ts                        new — GET
+    analytics/
+      overview/route.ts                             new — GET
+      by-period/route.ts                            new — GET
+      by-category/route.ts                          new — GET
+      trends/route.ts                               new — GET
+      top-days/route.ts                             new — GET
+      budget-vs-actual/route.ts                     new — GET
+    ledger/
+      people/route.ts                               new — GET, POST
+      people/[id]/route.ts                           new — GET, PATCH, DELETE
+      people/[id]/entries/route.ts                   new — GET, POST
+      people/[id]/settle/route.ts                    new — POST
+      entries/[id]/route.ts                          new — PATCH, DELETE
+    templates/
+      route.ts                                      new — GET, POST
+      [id]/route.ts                                  new — PATCH, DELETE
+    csv/
+      export/route.ts                                new — GET
+      import/preview/route.ts                        new — POST
+      import/commit/route.ts                         new — POST
+
+  next.config.ts                                    changed — add rewrites(): '/health' -> '/api/health' (see Open questions #1 for why both paths exist)
+
+  lib/api.ts                                        changed — API_URL becomes same-origin (relative prefixUrl, or drop prefixUrl entirely)
+  components/providers/SessionProvider.tsx           changed — refresh call uses same-origin URL
+  components/settings/AccountForm.tsx                 changed — drop FlatApiError handling, read the now-structured {error:{code,message}} shape
+  __tests__/settings-account.test.tsx                 changed — update the mocked error shape to match
+
+  # Tests — one per new lib/server/* and app/api/* file, colocated as *.test.ts:
+  lib/server/auth/auth.service.test.ts                new — rewritten from dime-api's version (prisma injected directly, jose mocked instead of fastify.jwt)
+  lib/server/categories/categories.service.test.ts    new — ported near-verbatim (already mocks prisma)
+  lib/server/transactions/transactions.service.test.ts  new — ported near-verbatim
+  lib/server/budgets/budgets.service.test.ts           new — ported near-verbatim
+  lib/server/budgets/budgets.period.test.ts             new — ported verbatim (pure logic, no mocks needed)
+  lib/server/analytics/analytics.service.test.ts        new — ported near-verbatim
+  lib/server/analytics/analytics.period.test.ts          new — ported verbatim
+  lib/server/ledger/ledger.service.test.ts               new — ported near-verbatim
+  lib/server/ledger/ledger.balance.test.ts                new — ported verbatim
+  lib/server/templates/templates.service.test.ts          new — ported near-verbatim
+  lib/server/csv/csv.service.test.ts                       new — ported near-verbatim
+  lib/server/csv/csv.parse.test.ts                          new — ported verbatim
+  lib/server/csv/csv.token.test.ts                          new — ported verbatim
+  lib/server/rateLimit.test.ts                              new — new logic, needs new tests
+  lib/server/errorResponse.test.ts                          new — new logic, needs new tests
+  # Route-handler-level tests (replacing dime-api's real-Fastify-instance route tests) — one per app/api/<module> group,
+  # calling the exported route handler functions directly with a Next.js Request, per module:
+  app/api/health/route.test.ts                              new
+  app/api/auth/auth.routes.test.ts                          new — covers all 7 auth routes in one file, mirroring dime-api/src/modules/auth/auth.test.ts's grouping
+  app/api/categories/categories.routes.test.ts               new
+  app/api/transactions/transactions.routes.test.ts            new
+  app/api/budgets/budgets.routes.test.ts                       new
+  app/api/analytics/analytics.routes.test.ts                    new
+  app/api/ledger/ledger.routes.test.ts                            new
+  app/api/templates/templates.routes.test.ts                      new
+  app/api/csv/csv.routes.test.ts                                    new
+
+  # Playwright e2e — retargeted, not new files, changed in place once cutover is verified per module:
+  e2e/helpers/api.ts                                changed — API_URL becomes same-origin (http://localhost:3000)
+  playwright.config.ts                              changed — drop the dime-api webServer entry once dime-api is no longer needed for e2e
+```
+
+`server-only` (the package) is imported at the top of every file under `lib/server/` so an accidental client-component import fails the build loudly rather than leaking Prisma/bcrypt into the browser bundle — add it as a new dependency (`npm view server-only version` at implementation time).
+
+## Architecture
+
+| Decision | Chosen | Rejected | Why |
+|---|---|---|---|
+| Auth transport | Bearer JWT in `Authorization` header, unchanged | httpOnly same-origin cookies + CSRF | Bundles a second, unrelated migration (new CSRF handling, `SessionProvider` rewrite) into this one. User's explicit choice. |
+| JWT library | `jose` (`SignJWT`/`jwtVerify`, HS256, same `JWT_ACCESS_SECRET` env value dime-api already uses) | Keep `@fastify/jwt` | `@fastify/jwt` is a Fastify plugin — no meaning outside a Fastify instance. `jose` is a standalone, well-typed, Node/Edge-portable library with no framework coupling. Reusing the *same secret value* (not regenerating one) keeps tokens cross-verifiable between dime-api and dime-web during the transition — see Scope→Depends on. |
+| Database | dime-web's own `prisma/schema.prisma` + copied migration history, pointed at the **same physical Postgres database** dime-api already uses (same `DATABASE_URL` value) | A separate/new database, migrated via data copy | The whole point of the module-by-module sequencing (see below) is that ported and not-yet-ported modules must see the same data. A separate database would break that immediately — e.g. a category created via the ported `categories` module would be invisible to the not-yet-ported `transactions` module still reading from dime-api. Because dime-web's copied migration folder names/checksums match dime-api's exactly, Prisma's `_prisma_migrations` tracking table (itself just a table in the shared database) already records them as applied — `prisma migrate deploy` against the shared DB will recognize this and apply nothing on first run, not attempt to re-run or conflict. |
+| Prisma client lifecycle | Standard Next.js `globalThis`-cached singleton (`lib/server/prisma.ts`), exporting `export const prisma: PrismaClient` — `const globalForPrisma = globalThis as unknown as {prisma?: PrismaClient}; export const prisma = globalForPrisma.prisma ?? new PrismaClient(); if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma` | Fastify plugin lifecycle (`$connect`/`onClose` tied to server boot/shutdown) | Next.js has no boot/shutdown hook per request; the Fastify pattern has no equivalent and would leak connections under dev hot-reload. Every other `lib/server/*/*.service.ts` imports this same `prisma` export directly (they no longer receive it as a function argument the way dime-api's did via `fastify.prisma` — Route Handlers call `<domain>Service.fn(prisma, ...args)` the same way dime-api's route handlers did, just with this module's `prisma` instead of `fastify.prisma`). |
+| Rate limiting | Postgres-backed fixed-window counter (`RateLimitBucket` table, see Data model), keyed by client IP (from `x-forwarded-for`), same limits as today (100/min global default via env, 10/min CSV-export override) | In-memory `Map` | Kuberns explicitly supports horizontal scaling to multiple replicas as a platform feature, and its own docs warn that scaling out requires moving in-process state to an external service. Postgres is a required dependency regardless; a Postgres-backed limiter costs no new infrastructure and stays correct whether or not replicas are ever turned on. **Correction (found during Feature 0's review):** `x-forwarded-for` is *not* what `dime-api` uses today — verified against `dime-api/src/server.ts`, its `@fastify/rate-limit` registration sets no `trustProxy`/custom `keyGenerator`, so it keys on Fastify's socket-derived `request.ip` and never reads that header. dime-web's choice is deliberate and independent of matching dime-api: Kuberns sits in front of the app as a reverse proxy, so the raw socket IP a Next.js Route Handler would see is the proxy's, not the real client's — `x-forwarded-for` (or whatever header Open question #2 resolves to) is required for this deployment topology regardless of what dime-api does. Client-supplied header values are inherently spoofable without a trusted-proxy allowlist verifying only Kuberns itself can set this header; accepted here as a known, pre-existing-shaped limitation (dime-api's own IP-based keying is equally spoofable via other means), not one this phase introduces or worsens. |
+| Rate-limit algorithm | Fixed window (count + window-start per key, upsert-increment, stale rows deleted opportunistically on each check) | Sliding window / token bucket | Matches `@fastify/rate-limit`'s own current behavior (also a fixed-window counter) — this phase preserves existing behavior, it doesn't improve rate-limiting precision. This match is scoped to the windowing algorithm only, not the key source (see the correction in the row above). A sliding-window/token-bucket algorithm is a real, separate improvement that can be proposed later without being tangled into a backend-hosting migration. |
+| Error response shape | Standardize on the structured `{ error: { code, message } }` shape everywhere, via `lib/server/errorResponse.ts` | Keep the three existing shapes (flat, structured, and the global-handler variant) | `TDD-PAISA.md` §3.1 documents three shapes and explicitly says not to reconcile them "opportunistically inside a feature phase" — this phase is the deliberate, named exception: every route handler is being rewritten regardless, so unifying the shape here is ~zero marginal cost versus a dedicated follow-up that touches all ~40 endpoints a second time. Verified blast radius on the frontend: exactly one file depends on the flat shape today (`components/settings/AccountForm.tsx`, live-confirmed via its `FlatApiError` type and the live 400 response `{"error":"Current password is incorrect"}`-style body), updated in this phase. |
+| Error `code` values | A fixed, small enum keyed by HTTP status, applied uniformly by every route handler rather than invented per-endpoint: `400→"VALIDATION_ERROR"`, `401→"UNAUTHORIZED"` (live-verified, unchanged), `404→"NOT_FOUND"`, `409→"CONFLICT"`, `429→"RATE_LIMITED"`, `500→"INTERNAL_ERROR"` (matches `dime-api/src/server.ts`'s existing global handler value). `apiError(status, code, message)` takes `code` as an explicit parameter, typed as the fixed `ErrorCode` union rather than `string` — a caller states which of the six it means, but TypeScript (not internal derivation from `status`) is what stops a route from inventing a free-text one. Resolved this way in `phases/001-merge-backend-into-nextjs/tickets/F0.md` — this row previously described an earlier `apiError(status, message)` design that derived `code` internally, which this phase's Feature 0 ticket didn't implement. | A bespoke `code` string per error case (e.g. `"CATEGORY_NAME_TAKEN"`, `"INVALID_CATEGORY_ID"`); deriving `code` from `status` alone with no parameter | dime-api's own codes today are inconsistent to nonexistent (most errors are flat strings with no code at all). A small fixed enum is enough for the frontend to branch on category-of-error (auth vs validation vs not-found vs conflict vs rate-limited) without requiring every route author to invent and remember a new string; the `message` field carries the specific, human-readable detail (e.g. `"Category name already exists"`), unchanged in spirit from today's flat messages. |
+| Rate-limit-exceeded response | `429 { error: { code: "RATE_LIMITED", message: "Too many requests, try again later" } }`, returned by `lib/server/rateLimit.ts`'s check before any route-specific logic runs | Match `@fastify/rate-limit`'s exact default exceeded-response body (not independently confirmed live — would require exceeding the global limit, impractical at this dev environment's overridden 100000/min) | `429` is the correct HTTP status for rate limiting regardless of the old plugin's exact body, and using the same standardized envelope as every other error keeps the contract uniform. Not a live-verified fixture — flagged here explicitly per the `tdd` skill's own rule ("say which of the two each contract was written from") rather than presented as observed fact. |
+| CSV export | Buffer the export in memory (drain the existing `exportRows()` async generator with a `for await` loop, return one `Response` with the exact headers/BOM verified live) | Port the Node-stream (`Readable.from`) to a Web `ReadableStream` | Streaming existed because `Readable.from()` was convenient in Fastify, not because of measured memory pressure. Data volumes are small (500-row cursor-page cap already exists upstream). A hand-rolled `ReadableStream` adds real complexity (backpressure, error-mid-stream, host/proxy buffering variance) for no measured benefit at this scale. |
+| CSV import multipart | Web `Request.formData()` / `File`, checking `File.size` before reading bytes | Port `@fastify/multipart`'s `attachFieldsToBody` pattern | `@fastify/multipart` is Fastify-specific. `File.size` is available synchronously from the Web API, so the 2MB cap can be checked before any bytes are read — simpler than dime-api's current two-layer check (plugin-level limit + a second in-handler check, per its own code comment). |
+| Zod version | v4 (dime-web's existing version) for every ported schema | Keep v3 for ported backend schemas | Running two Zod majors in one runtime is fragile dependency management for no benefit once merged into one package.json. Verify the exact v4 API surface (`z.string().cuid()`, `invalid_type_error`, `errorMap`, error-array access all changed shape between v3 and v4) against the actually-installed package at implementation time, not from memory. |
+| Health check route | `app/api/health/route.ts`, plus a `next.config.ts` rewrite mapping `/health` → `/api/health` | Route only at `/health` (matching dime-api's current bare path) or only at `/api/health` (consistent with everything else) | Kuberns' exact health-check path convention is unconfirmed (their public docs don't specify it — see Open questions #1). The rewrite makes the route reachable at both paths, so whichever convention Kuberns actually uses, it works without a guess that could silently break deploy health checks. |
+
+## Data model
+
+Ported entities are **unchanged** from `dime-api/prisma/schema.prisma` (User, RefreshToken, Category, Transaction, Budget, Template, LedgerPerson, LedgerEntry, enums `BudgetType`/`LedgerEntryType`) — copied verbatim, no field/type/constraint changes in this phase. Full field-level detail lives in that file; it is not re-transcribed here since it is a copy, not a redesign — re-typing every field by hand risks introducing a transcription error the copy itself doesn't have.
+
+**One new entity, added by this phase:**
+
+| Field | Type | Null | Notes |
+|---|---|---|---|
+| `id` | cuid | no | surrogate PK |
+| `key` | String | no | e.g. `"global:203.0.113.4"` or `"csv-export:203.0.113.4"` — identity + route-group, composed in `lib/server/rateLimit.ts`, not user input |
+| `windowStart` | DateTime | no | truncated to the start of the current window (e.g. floor to the minute for a 60s window) |
+| `count` | Int | no | default 1, incremented on each hit within the same `(key, windowStart)` |
+
+**Identity.** `(key, windowStart)` unique together — two hits in the same window for the same key/route-group are the same row, incremented; a new window is a new row.
+
+**Lifecycle.** Created on first hit in a window; incremented on subsequent hits in the same window; becomes irrelevant (but not actively deleted by a background job in this phase — see Risks) once its window passes. `lib/server/rateLimit.ts` opportunistically deletes rows older than 1 hour on each check, so the table self-trims under normal traffic without needing a cron.
+
+**Concurrency.** Two requests from the same key in the same window racing to increment: handled with a single upsert (`INSERT ... ON CONFLICT (key, windowStart) DO UPDATE SET count = count + 1`), which Postgres serializes — no lost updates, no separate locking needed.
+
+**Migrations.** One new, purely additive migration (`add_rate_limit_bucket`) — creates the `RateLimitBucket` table only. Not destructive; does not touch any existing table or column. Applied against the same shared database `dime-api` already uses — `dime-api` itself never reads or writes this table, so this addition is invisible to it.
+
+## API contracts
+
+Every endpoint below is a **port**, not a redesign — the authoritative existing shape is the cited `dime-api` source file (its `*.routes.ts` + `*.schema.ts`), which this phase carries over with only the changes named in the Architecture table (error-shape standardization, Zod v4 syntax). Envelope shapes were **live-verified**, not assumed from naming convention (see `fixtures/README.md` — several endpoints' actual envelopes differ from what a "list endpoint returns an array" assumption would predict).
+
+All endpoints below except `health`, `auth/register`, `auth/login`, `auth/refresh`, and `auth/google` require the `authenticate` helper (bearer token verified via `jose`; missing/invalid token → `401 {error:{code:"UNAUTHORIZED",message:"Invalid or missing token"}}`, live-verified shape).
+
+**Standardized error shape, all endpoints, replacing the three existing shapes:** `{ error: { code: string, message: string } }`. Status codes below name the trigger; the body shape is this envelope in every case unless noted.
+
+| Module | Method | Path | Request | Success response | Error statuses (trigger) | Source of record |
+|---|---|---|---|---|---|---|
+| health | GET | `/api/health` (+ `/health` via rewrite) | — | `200 {status:"ok",timestamp}` (live-verified body shape) | — | `dime-api/src/modules/health/health.routes.ts` |
+| auth | POST | `/api/auth/register` | `{email,password,name?}` | `201 {accessToken,refreshToken,user}` (live-verified flat envelope, no wrapper) | `409` (email already registered) | `dime-api/src/modules/auth/auth.service.ts` `registerUser` |
+| auth | POST | `/api/auth/login` | `{email,password}` | `200 {accessToken,refreshToken,user}` | `401` (invalid email/password, live-verified flat body `{"error":"Invalid email or password"}` under the *old* shape — becomes `{error:{code:"UNAUTHORIZED",message:"Invalid email or password"}}` under the standardized shape) | `auth.service.ts` `loginUser` |
+| auth | POST | `/api/auth/refresh` | `{refreshToken}` | `200 {accessToken,refreshToken}` (rotated) | `401` (invalid/expired token) | `auth.service.ts` `refreshTokens` |
+| auth | POST | `/api/auth/logout` | `{refreshToken}` | `204` (idempotent — no-ops if token not found) | — | `auth.service.ts` `logoutUser` |
+| auth | GET | `/api/auth/me` | — (auth) | `200 UserProfile` | — | `auth.service.ts` `getMe` |
+| auth | PATCH | `/api/auth/me` | `{name?,theme?}` | `200 UserProfile` | `400` (validation) | `auth.service.ts` `updateMe` |
+| auth | PATCH | `/api/auth/me/password` | `{oldPassword,newPassword}` | `200` (no body, or `{}` — confirm at implementation via the ported service's actual return, which is `void`) | `400` (wrong old password — live-verified flat body under old shape `{"error":"Current password is incorrect"}`), `404` (user not found, unreachable in practice since auth already establishes the user) | `auth.service.ts` `updatePassword` |
+| auth | DELETE | `/api/auth/me` | — (auth) | `204` | — | `auth.service.ts` `deleteMe` |
+| auth | POST | `/api/auth/google` | `{idToken}` | `200 {accessToken,refreshToken,user}` | `401` (invalid Google token / missing email claim) | `auth.service.ts` `googleAuth` — calls `https://oauth2.googleapis.com/tokeninfo`, see External dependencies |
+| categories | GET | `/api/categories` | — (auth) | `200 {categories: Category[]}` (**live-verified envelope** — not a bare array) | — | `dime-api/src/modules/categories/categories.routes.ts`; live fixture `fixtures/categories-list-response.json` (18 seeded categories) |
+| categories | POST | `/api/categories` | `{name,emoji,color}` | `201 Category` | `400` (validation, live-verified flat body `{"error":"Name is required"}` under old shape), `409` (duplicate name for this user) | `categories.service.ts` |
+| categories | PATCH | `/api/categories/:id` | partial `{name?,emoji?,color?}` | `200 Category` | `400`, `404` | `categories.service.ts` |
+| categories | DELETE | `/api/categories/:id` | — | `204` | `404`, `409` (referenced by a transaction or budget) | `categories.service.ts` |
+| transactions | GET | `/api/transactions` | query: `categoryId?,isIncome?,search?,from?,to?,limit?(<=100),cursor?` | `200 {items: Transaction[], nextCursor: string\|null}` (**live-verified envelope**) | — | `dime-api/src/modules/transactions/transactions.routes.ts` |
+| transactions | POST | `/api/transactions` | `{amount,date,note?,isIncome,categoryId,templateId?}` | `201 Transaction` | `400` (validation, live-verified flat `{"error":"Invalid category ID"}` for a bad category reference), `404` (category not owned by user) | `transactions.service.ts` — optional `templateId` bumps that template's `usageCount`/`lastUsedAt`, write-time only, never persisted on the transaction itself |
+| transactions | GET | `/api/transactions/:id` | — | `200 Transaction` | `404` | `transactions.service.ts` |
+| transactions | PATCH | `/api/transactions/:id` | partial | `200 Transaction` | `400`, `404` | `transactions.service.ts` |
+| transactions | DELETE | `/api/transactions/:id` | — | `204` | `404` | `transactions.service.ts` |
+| budgets | GET | `/api/budgets` | — | `200 {budgets: BudgetWithProgress[]}` (**live-verified envelope**) | — | `dime-api/src/modules/budgets/budgets.routes.ts` |
+| budgets | GET | `/api/budgets/:id/progress` | — | `200 BudgetProgress` | `404` | `budgets.service.ts` `getBudgetProgress` |
+| budgets | POST | `/api/budgets` | `{name,emoji,colour,type,amount,categoryId,startDate?}` | `201 Budget` | `400`, `404` (category not owned) | `budgets.service.ts` — note the schema field is spelled `colour` (British), matching the Prisma column; not normalized in this phase (see `LEARNINGS.md`) |
+| budgets | PATCH | `/api/budgets/:id` | partial | `200 Budget` | `400`, `404` | `budgets.service.ts` |
+| budgets | DELETE | `/api/budgets/:id` | — | `204` | `404` | `budgets.service.ts` |
+| analytics | GET | `/api/analytics/overview` | query: `from?,to?` | `200` flat object `{totalIncome,totalExpense,netBalance,transactionCount,avgDailySpend,from,to}` (**live-verified**, no wrapper key) | — | `dime-api/src/modules/analytics/analytics.routes.ts`; live fixture confirms exact field set |
+| analytics | GET | `/api/analytics/by-period` | query: `bucket(weekly\|monthly\|yearly),from?,to?` | `200` series array — shape per `analytics.service.ts` | — | same |
+| analytics | GET | `/api/analytics/by-category` | query: `from?,to?` | `200` breakdown array with percentages | — | same |
+| analytics | GET | `/api/analytics/trends` | query: `months?(default 6,max 36)` | `200` array of `{month,income,expense,net}` | — | same |
+| analytics | GET | `/api/analytics/top-days` | query: `from?,to?,limit?` | `200` array of top-spend days | — | same |
+| analytics | GET | `/api/analytics/budget-vs-actual` | — | `200 {budgets: BudgetWithProgress[]}` — reuses `listBudgets` per `analytics.routes.ts` | — | same |
+| ledger | GET | `/api/ledger/people` | — | `200 {people: LedgerPersonWithBalance[], summary: {...}}` (**live-verified envelope**, empty-state fixture captured) | — | `dime-api/src/modules/ledger/ledger.routes.ts` |
+| ledger | POST | `/api/ledger/people` | `{name,phone?,note?,color?}` | `201 LedgerPerson` | `400`, `409` (duplicate name, case-insensitive, app-level check) | `ledger.service.ts` |
+| ledger | GET | `/api/ledger/people/:id` | — | `200 LedgerPersonWithBalance` | `404` | `ledger.service.ts` |
+| ledger | PATCH | `/api/ledger/people/:id` | partial | `200 LedgerPerson` | `400`, `404` | `ledger.service.ts` |
+| ledger | DELETE | `/api/ledger/people/:id` | — | `204` (cascades entries) | `404` | `ledger.service.ts` |
+| ledger | GET | `/api/ledger/people/:id/entries` | — | `200` active + settled entries, shape per `ledger.service.ts` | `404` | `ledger.service.ts` |
+| ledger | POST | `/api/ledger/people/:id/entries` | `{amount,type(GAVE\|RECEIVED),date,note?}` | `201 LedgerEntry` | `400`, `404` (person not found/not owned) | `ledger.service.ts` |
+| ledger | PATCH | `/api/ledger/entries/:id` | partial, can set `settled`/`settledAt` | `200 LedgerEntry` | `400`, `404` | `ledger.service.ts` |
+| ledger | DELETE | `/api/ledger/entries/:id` | — | `204` | `404` | `ledger.service.ts` |
+| ledger | POST | `/api/ledger/people/:id/settle` | `{expectedBalance}` | `200` — bulk-settles all active entries for the person | `404`, `409` (optimistic-concurrency check: `expectedBalance` doesn't match current balance — **preserve this check exactly**, it's the one place this API has an explicit concurrency guard) | `ledger.service.ts` `settleAll` |
+| templates | GET | `/api/templates` | query: `sort?(usage\|recent\|label)` | `200 {templates: Template[]}` (**live-verified envelope**) | — | `dime-api/src/modules/templates/templates.routes.ts` |
+| templates | POST | `/api/templates` | `{label,emoji?,amount?,note?,isIncome?,categoryId?}` | `201 Template` | `400`, `409` (duplicate label for this user) | `templates.service.ts` |
+| templates | PATCH | `/api/templates/:id` | partial | `200 Template` | `400`, `404` | `templates.service.ts` |
+| templates | DELETE | `/api/templates/:id` | — | `204` | `404` | `templates.service.ts` |
+| csv | GET | `/api/csv/export` | — | `200`, `Content-Type: text/csv; charset=utf-8`, `Content-Disposition: attachment; filename="paisa-export-<date>.csv"`, `Cache-Control: no-store`, body starts with a **UTF-8 BOM** then `Date,Amount,Type,Category,Note` header row (all **live-verified byte-for-byte**, see `fixtures/csv-export-sample.csv`); rate-limited 10/min (live-verified `x-ratelimit-limit: 10` header) | — | `csv.service.ts` `exportRows` (drained via `for await`, not streamed) |
+| csv | POST | `/api/csv/import/preview` | multipart: `file` (csv, <=2MB), classifies rows | `200 {previewToken, rows: [...]}` (30-min-TTL signed token, `csv.token.ts`) | `400` (bad file / too large — checked via `File.size` before reading, per Architecture) | `csv.service.ts` `previewImport` |
+| csv | POST | `/api/csv/import/commit` | multipart: `file`, `previewToken` | `200` — bulk-inserts in chunks of 500 inside one transaction | `400` (token invalid/expired, or file hash doesn't match the previewed file — re-verified, not trusted from the client) | `csv.service.ts` `commitImport` |
+
+## External dependencies
+
+| Service | Used for | Auth | Failure mode | Fixture |
+|---|---|---|---|---|
+| Google `tokeninfo` (`https://oauth2.googleapis.com/tokeninfo?id_token=...`) | Verifying a client-supplied Google Sign-In `idToken` | none (public introspection endpoint) | Non-200 or missing `email` claim → `401`. No retry — a failed verification is a failed login attempt, not a transient error. | Not re-verified live in this phase (Google Sign-In is a pre-existing, already-flagged-weak integration — see `dime-api` research: no `aud`/client-ID check today). Carried over unchanged; strengthening it is out of scope for this phase. |
+
+No other external services. No file storage, no email/SMS, no payment providers, no webhooks (confirmed in the original backend research and unchanged by this phase).
+
+## Testing and done
+
+| Level | Proves | Where |
+|---|---|---|
+| unit | Ported service-layer logic against a mock Prisma client (same harness style as today) | `lib/server/*/*.test.ts` |
+| unit | Pure logic (balance math, period bucketing, CSV row parsing, rate-limit key composition) | `lib/server/*/*.period.test.ts`, `*.balance.test.ts`, `csv.parse.test.ts`, `rateLimit.test.ts` |
+| contract | Every Route Handler's shape and status codes, called directly with a Next.js `Request` | `app/api/**/*.routes.test.ts` |
+| integration | Cross-module invariants that only show up end-to-end: template `usageCount` bump on transaction create, ledger settle's optimistic-concurrency check, category-delete's in-use guard | folded into the relevant `*.routes.test.ts` files rather than a separate suite — these are two-call sequences, not full user journeys |
+| e2e | The existing Playwright specs (`e2e/*.spec.ts`), retargeted at `dime-web`'s own routes per module as each is cut over | `e2e/` |
+
+**Done for this phase** — each becomes the final validation task per the sequencing below:
+
+- [ ] `health` + `categories` (the pilot pair) pass their unit, contract, and existing `e2e/categories.spec.ts` suites with `dime-web` serving both, dime-api untouched for everything else
+- [ ] Every one of the ~40 endpoints in the API contracts table above is implemented and answers with its documented shape, verified against its ported unit + contract tests
+- [ ] Every Vitest suite that mocks `lib/api/*` (the existing frontend contract) still passes unmodified, except the one named exception (`settings-account.test.tsx`)
+- [ ] Full existing Playwright suite passes with `playwright.config.ts`'s `dime-api` `webServer` entry removed — i.e. `dime-web` alone serves every e2e journey
+- [ ] `npm run verify` — `format:check`/`lint` pass for every new file this phase adds (pre-existing repo-wide backlog from the `setup` pass is a separate, already-recorded item — not this phase's job to clear)
+- [ ] No stub, `501`, or `[NEEDS CLARIFICATION]` remains in any ported route
+
+### Numeric anchors
+
+| Property | Anchor |
+|---|---|
+| p95, authenticated read (categories/budgets/templates list) on Kuberns | ≤ 300ms |
+| CSV export, in-memory buffering | correct up to the existing 500-row cursor-page cap; no new ceiling introduced |
+| Rate limit parity | unchanged from today's values — 100/min global default (env-configurable), 10/min CSV-export override |
+| Access token TTL | unchanged — 15 minutes |
+| Refresh token TTL | unchanged — 30 days |
+
+## Open questions
+
+| # | Question | Owner | Blocks | Asked |
+|---|---|---|---|---|
+| 1 | Does Kuberns expect a specific health-check path, or is it configurable per-app? Public docs don't say. | user (check the Kuberns dashboard/support when setting up the deploy) | Nothing in this phase — resolved defensively via the `/health` → `/api/health` rewrite, so either convention works without a guess. Only matters if Kuberns needs a *third*, different path, in which case add another rewrite. | 2026-09-04 |
+| 2 | What HTTP header does Kuberns' reverse proxy use for the real client IP (`x-forwarded-for`, `x-real-ip`, or a Kuberns-specific header)? | user | Rate-limiter key precision only — `x-forwarded-for` is the near-universal default and is what's implemented; if Kuberns uses something else, the limiter still functions (falls back to treating all traffic as one key, which is safe-but-imprecise, not broken) until corrected. | 2026-09-04 |
+| 3 | `dime-api`'s eventual fate (archive vs. delete) — explicitly deferred per the decision doc and SOW, not this phase's job to resolve. | user | Nothing in this phase; blocks a future phase that would remove `dime-api` entirely. | 2026-09-04 |
+
+## Risks
+
+- **`RateLimitBucket` grows unboundedly if the opportunistic per-check cleanup (delete rows older than 1h) turns out to be too infrequent under low traffic** (a personal app might go hours between requests, delaying cleanup). Low risk at this app's scale (rows are tiny, cleanup runs on every request that *does* arrive), but if it ever matters, the fix is a scheduled cleanup job — not a redesign of the table.
+- **Reusing the same `JWT_ACCESS_SECRET` across dime-api and dime-web during the transition** means a compromise of one system's secret compromises both. Accepted deliberately for transition continuity (see Architecture); once `dime-api` is fully retired, rotating the secret is a clean, independent follow-up.
+- **Module-by-module sequencing depends on both systems staying pointed at the same database for the full transition.** If that assumption is ever violated (e.g. someone points `dime-web`'s `DATABASE_URL` at a different instance during setup), ported and unported modules will silently diverge. Worth a one-line assertion/comment at the top of `lib/server/prisma.ts` noting this constraint explicitly, so it isn't rediscovered by debugging a data-inconsistency bug.

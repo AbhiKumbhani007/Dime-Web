@@ -34,6 +34,12 @@ Things worth knowing before touching this codebase. `ticket`/`tdd` read this bef
   doesn't set that condition by default, so every `lib/server/*` file's `import 'server-only'` throws
   immediately under test. Fixed once, globally, via `resolve.alias` in `vitest.config.ts` mapping
   `server-only` → `node_modules/server-only/empty.js`. No per-test-file workaround needed.
+- **`dime-api` does not actually key its rate limiter on `x-forwarded-for`** — its `@fastify/rate-limit`
+  registration sets no `trustProxy`/custom `keyGenerator`, so it uses Fastify's socket-derived
+  `request.ip`. `dime-web`'s Postgres-backed limiter (`lib/server/rateLimit.ts`) still needs
+  `x-forwarded-for` regardless — Kuberns sits in front as a reverse proxy, so the raw socket IP a
+  Route Handler sees would be the proxy's, not the real client's. Found during Feature 0's review;
+  corrected in `tdd.md`'s Architecture table rather than left as a stale "matches dime-api" claim.
 - **`jose`'s WebCrypto key handling fails under jsdom** — `SignJWT`/`jwtVerify` throw
   `"Key for the HS256 algorithm must be one of type CryptoKey, KeyObject, JSON Web Key, or
   Uint8Array. Received an instance of Uint8Array"` when run in Vitest's default `jsdom` environment,

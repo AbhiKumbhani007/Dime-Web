@@ -107,4 +107,24 @@ describe('checkRateLimit', () => {
     expect(staleness).toBeGreaterThanOrEqual(60 * 60 * 1000 - 1000)
     expect(staleness).toBeLessThanOrEqual(60 * 60 * 1000 + 1000)
   })
+
+  it('never deletes the active bucket for a window longer than 1 hour', async () => {
+    // A window's windowStart can be more than 1h in the past (e.g. a daily
+    // window's start-of-day) — the cleanup must not wipe the row the
+    // upsert is about to touch, or the count silently resets every call.
+    vi.mocked(prisma.rateLimitBucket.upsert).mockResolvedValue({
+      count: 1,
+    } as never)
+
+    await checkRateLimit('csv-export-daily:203.0.113.4', 50, 24 * 60 * 60)
+
+    const upsertCall = vi.mocked(prisma.rateLimitBucket.upsert).mock
+      .calls[0][0] as { where: { key_windowStart: { windowStart: Date } } }
+    const deleteCall = vi.mocked(prisma.rateLimitBucket.deleteMany).mock
+      .calls[0][0] as { where: { windowStart: { lt: Date } } }
+
+    expect(deleteCall.where.windowStart.lt.getTime()).toBeLessThanOrEqual(
+      upsertCall.where.key_windowStart.windowStart.getTime()
+    )
+  })
 })

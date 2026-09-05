@@ -17,6 +17,18 @@ export default defineConfig({
       // Playwright E2E tests run under `@playwright/test`, not Vitest.
       'e2e/**',
     ],
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'lcov'],
+      reportsDirectory: './coverage',
+      exclude: [
+        '**/node_modules/**',
+        '**/.next/**',
+        'e2e/**',
+        '**/*.config.*',
+        'src/test/**',
+      ],
+    },
   },
   resolve: {
     alias: {

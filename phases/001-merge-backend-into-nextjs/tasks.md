@@ -10,14 +10,14 @@ stands as the completeness check either way.
 
 ## Feature 0: Foundational — shared plumbing every module needs
 
-- [ ] T001 [P] Add backend-port dependencies: `prisma`, `@prisma/client`, `jose`, `bcryptjs`, `csv-parse`, `server-only` — pin every version against the npm registry at implementation time, not from this document `package.json`
-- [ ] T002 Copy Prisma schema + migration history from `dime-api`; add the `RateLimitBucket` model and its own additive migration; point `dime-web`'s `.env.local` `DATABASE_URL`/`JWT_ACCESS_SECRET` at the same values `dime-api`'s `.env` already uses (same physical database — confirm with `prisma migrate status` showing zero drift before and after) `prisma/schema.prisma`, `prisma/migrations/20260405104227_init/`, `prisma/migrations/20260902210852_template_emoji_category_usage/`, `prisma/migrations/<timestamp>_add_rate_limit_bucket/` (after T001)
-- [ ] T003 Add the Next.js Prisma client singleton, exported as `prisma` `lib/server/prisma.ts` (after T002)
-- [ ] T004 [P] [TEST] Add the error-response helper and its fixed status→code enum (400/401/404/409/429/500) `lib/server/errorResponse.ts`, `lib/server/errorResponse.test.ts`
-- [ ] T005 [TEST] Add the Postgres-backed rate limiter (fixed-window counter against `RateLimitBucket`, `x-forwarded-for` key, opportunistic cleanup of rows older than 1h) `lib/server/rateLimit.ts`, `lib/server/rateLimit.test.ts` (after T002, T003)
-- [ ] T006 [P] [TEST] Add the bearer-token auth helper (verifies via `jose`, same `JWT_ACCESS_SECRET`/HS256/`{userId,email}` payload dime-api uses) `lib/server/auth/authenticate.ts`, `lib/server/auth/authenticate.test.ts` (after T001)
-- [ ] T007 [P] Copy small shared utilities: `httpError.ts` (verbatim), `defaultCategories.ts` (verbatim), `common.schema.ts` (Zod v3→v4 syntax updated) `lib/server/httpError.ts`, `lib/server/defaultCategories.ts`, `lib/server/common.schema.ts` (after T002)
-- [ ] T008 [P] Add the `/health` → `/api/health` rewrite (Kuberns' exact health-check path convention is an open question — this covers both without guessing) `next.config.ts`
+- [X] T001 [P] Add backend-port dependencies: `prisma`, `@prisma/client`, `jose`, `bcryptjs`, `csv-parse`, `server-only` — pin every version against the npm registry at implementation time, not from this document `package.json`
+- [X] T002 Copy Prisma schema + migration history from `dime-api`; add the `RateLimitBucket` model and its own additive migration; point `dime-web`'s `.env.local` `DATABASE_URL`/`JWT_ACCESS_SECRET` at the same values `dime-api`'s `.env` already uses (same physical database — confirm with `prisma migrate status` showing zero drift before and after) `prisma/schema.prisma`, `prisma/migrations/20260405104227_init/`, `prisma/migrations/20260902210852_template_emoji_category_usage/`, `prisma/migrations/<timestamp>_add_rate_limit_bucket/` (after T001)
+- [X] T003 Add the Next.js Prisma client singleton, exported as `prisma` `lib/server/prisma.ts` (after T002)
+- [X] T004 [P] [TEST] Add the error-response helper and its fixed status→code enum (400/401/404/409/429/500) `lib/server/errorResponse.ts`, `lib/server/errorResponse.test.ts`
+- [X] T005 [TEST] Add the Postgres-backed rate limiter (fixed-window counter against `RateLimitBucket`, `x-forwarded-for` key, opportunistic cleanup of rows older than 1h) `lib/server/rateLimit.ts`, `lib/server/rateLimit.test.ts` (after T002, T003)
+- [X] T006 [P] [TEST] Add the bearer-token auth helper (verifies via `jose`, same `JWT_ACCESS_SECRET`/HS256/`{userId,email}` payload dime-api uses) `lib/server/auth/authenticate.ts`, `lib/server/auth/authenticate.test.ts` (after T001)
+- [X] T007 [P] Copy small shared utilities: `httpError.ts` (verbatim), `defaultCategories.ts` (verbatim), `common.schema.ts` (Zod v3→v4 syntax updated) `lib/server/httpError.ts`, `lib/server/defaultCategories.ts`, `lib/server/common.schema.ts` (after T002)
+- [X] T008 [P] Add the `/health` → `/api/health` rewrite (Kuberns' exact health-check path convention is an open question — this covers both without guessing) `next.config.ts`
 
 **Checkpoint:** shared plumbing (Prisma, error shape, rate limiting, auth verification, small utilities) exists and is unit-tested. Nothing product-facing yet — no route handler exists.
 

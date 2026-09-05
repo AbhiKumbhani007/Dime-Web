@@ -12,16 +12,18 @@ import {
   CategoryParamsSchema,
 } from '@/lib/server/categories/categories.schema'
 
-const RATE_LIMIT_MAX = Number(process.env.RATE_LIMIT_MAX ?? 100)
-const RATE_LIMIT_WINDOW_SECONDS = Number(
-  process.env.RATE_LIMIT_WINDOW_SECONDS ?? 60
-)
+function envNumber(name: string, fallback: number): number {
+  const raw = process.env[name]
+  if (!raw) return fallback
+  const parsed = Number(raw)
+  return Number.isFinite(parsed) ? parsed : fallback
+}
 
 async function checkGlobalRateLimit(request: Request) {
   const allowed = await checkRateLimit(
     rateLimitKey('global', request),
-    RATE_LIMIT_MAX,
-    RATE_LIMIT_WINDOW_SECONDS
+    envNumber('RATE_LIMIT_MAX', 100),
+    envNumber('RATE_LIMIT_WINDOW_SECONDS', 60)
   )
   return allowed
     ? null
@@ -31,108 +33,116 @@ async function checkGlobalRateLimit(request: Request) {
 type RouteContext = { params: Promise<{ id: string }> }
 
 export async function PATCH(request: Request, context: RouteContext) {
-  const limited = await checkGlobalRateLimit(request)
-  if (limited) return limited
-
-  let userId: string
   try {
-    ;({ userId } = await authenticate(request))
-  } catch (err) {
-    if (err instanceof AuthError) {
-      return apiError(401, 'UNAUTHORIZED', 'Invalid or missing token')
+    const limited = await checkGlobalRateLimit(request)
+    if (limited) return limited
+
+    let userId: string
+    try {
+      ;({ userId } = await authenticate(request))
+    } catch (err) {
+      if (err instanceof AuthError) {
+        return apiError(401, 'UNAUTHORIZED', 'Invalid or missing token')
+      }
+      throw err
     }
-    throw err
-  }
 
-  const params = await context.params
-  const paramsParsed = CategoryParamsSchema.safeParse(params)
-  if (!paramsParsed.success) {
-    return apiError(
-      400,
-      'VALIDATION_ERROR',
-      paramsParsed.error.issues[0]?.message ?? 'Invalid params'
-    )
-  }
-
-  let body: unknown
-  try {
-    body = await request.json()
-  } catch {
-    return apiError(400, 'VALIDATION_ERROR', 'Invalid JSON body')
-  }
-
-  const bodyParsed = UpdateCategoryBodySchema.safeParse(body)
-  if (!bodyParsed.success) {
-    return apiError(
-      400,
-      'VALIDATION_ERROR',
-      bodyParsed.error.issues[0]?.message ?? 'Validation error'
-    )
-  }
-
-  try {
-    const category = await updateCategory(
-      prisma,
-      userId,
-      paramsParsed.data.id,
-      bodyParsed.data
-    )
-    return NextResponse.json({ category }, { status: 200 })
-  } catch (err: unknown) {
-    const e = err as { code?: string; statusCode?: number; message?: string }
-    if (e.code === 'DUPLICATE_NAME') {
+    const params = await context.params
+    const paramsParsed = CategoryParamsSchema.safeParse(params)
+    if (!paramsParsed.success) {
       return apiError(
-        409,
-        'CONFLICT',
-        'A category with this name already exists'
+        400,
+        'VALIDATION_ERROR',
+        paramsParsed.error.issues[0]?.message ?? 'Invalid params'
       )
     }
-    if (e.statusCode === 404) {
-      return apiError(404, 'NOT_FOUND', e.message ?? 'Category not found')
+
+    let body: unknown
+    try {
+      body = await request.json()
+    } catch {
+      return apiError(400, 'VALIDATION_ERROR', 'Invalid JSON body')
     }
+
+    const bodyParsed = UpdateCategoryBodySchema.safeParse(body)
+    if (!bodyParsed.success) {
+      return apiError(
+        400,
+        'VALIDATION_ERROR',
+        bodyParsed.error.issues[0]?.message ?? 'Validation error'
+      )
+    }
+
+    try {
+      const category = await updateCategory(
+        prisma,
+        userId,
+        paramsParsed.data.id,
+        bodyParsed.data
+      )
+      return NextResponse.json({ category }, { status: 200 })
+    } catch (err: unknown) {
+      const e = err as { code?: string; statusCode?: number; message?: string }
+      if (e.code === 'DUPLICATE_NAME') {
+        return apiError(
+          409,
+          'CONFLICT',
+          'A category with this name already exists'
+        )
+      }
+      if (e.statusCode === 404) {
+        return apiError(404, 'NOT_FOUND', e.message ?? 'Category not found')
+      }
+      return apiError(500, 'INTERNAL_ERROR', 'An unexpected error occurred')
+    }
+  } catch {
     return apiError(500, 'INTERNAL_ERROR', 'An unexpected error occurred')
   }
 }
 
 export async function DELETE(request: Request, context: RouteContext) {
-  const limited = await checkGlobalRateLimit(request)
-  if (limited) return limited
-
-  let userId: string
   try {
-    ;({ userId } = await authenticate(request))
-  } catch (err) {
-    if (err instanceof AuthError) {
-      return apiError(401, 'UNAUTHORIZED', 'Invalid or missing token')
+    const limited = await checkGlobalRateLimit(request)
+    if (limited) return limited
+
+    let userId: string
+    try {
+      ;({ userId } = await authenticate(request))
+    } catch (err) {
+      if (err instanceof AuthError) {
+        return apiError(401, 'UNAUTHORIZED', 'Invalid or missing token')
+      }
+      throw err
     }
-    throw err
-  }
 
-  const params = await context.params
-  const paramsParsed = CategoryParamsSchema.safeParse(params)
-  if (!paramsParsed.success) {
-    return apiError(
-      400,
-      'VALIDATION_ERROR',
-      paramsParsed.error.issues[0]?.message ?? 'Invalid params'
-    )
-  }
-
-  try {
-    await deleteCategory(prisma, userId, paramsParsed.data.id)
-    return new NextResponse(null, { status: 204 })
-  } catch (err: unknown) {
-    const e = err as { code?: string; statusCode?: number }
-    if (e.code === 'CATEGORY_IN_USE') {
+    const params = await context.params
+    const paramsParsed = CategoryParamsSchema.safeParse(params)
+    if (!paramsParsed.success) {
       return apiError(
-        409,
-        'CONFLICT',
-        'Category is used by existing transactions'
+        400,
+        'VALIDATION_ERROR',
+        paramsParsed.error.issues[0]?.message ?? 'Invalid params'
       )
     }
-    if (e.statusCode === 404) {
-      return apiError(404, 'NOT_FOUND', 'Category not found')
+
+    try {
+      await deleteCategory(prisma, userId, paramsParsed.data.id)
+      return new NextResponse(null, { status: 204 })
+    } catch (err: unknown) {
+      const e = err as { code?: string; statusCode?: number; message?: string }
+      if (e.code === 'CATEGORY_IN_USE') {
+        return apiError(
+          409,
+          'CONFLICT',
+          'Category is used by existing transactions'
+        )
+      }
+      if (e.statusCode === 404) {
+        return apiError(404, 'NOT_FOUND', e.message ?? 'Category not found')
+      }
+      return apiError(500, 'INTERNAL_ERROR', 'An unexpected error occurred')
     }
+  } catch {
     return apiError(500, 'INTERNAL_ERROR', 'An unexpected error occurred')
   }
 }

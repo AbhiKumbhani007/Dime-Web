@@ -130,9 +130,66 @@ describe('categories routes', () => {
       expect(body.error.code).toBe('RATE_LIMITED')
       expect(prisma.category.findMany).not.toHaveBeenCalled()
     })
+
+    it('500s with the standardized envelope when the rate limiter itself throws, rather than crashing', async () => {
+      vi.mocked(prisma.rateLimitBucket.upsert).mockRejectedValue(
+        new Error('connection lost')
+      )
+      const token = await signToken()
+
+      const response = await GET(
+        makeRequest('GET', 'http://localhost/api/categories', { token })
+      )
+      expect(response.status).toBe(500)
+      const body = await response.json()
+      expect(body.error).toEqual({
+        code: 'INTERNAL_ERROR',
+        message: 'An unexpected error occurred',
+      })
+    })
+
+    it('500s with the standardized envelope when the service throws unexpectedly', async () => {
+      const token = await signToken()
+      vi.mocked(prisma.category.findMany).mockRejectedValue(
+        new Error('connection lost')
+      )
+
+      const response = await GET(
+        makeRequest('GET', 'http://localhost/api/categories', { token })
+      )
+      expect(response.status).toBe(500)
+      const body = await response.json()
+      expect(body.error.code).toBe('INTERNAL_ERROR')
+    })
   })
 
   describe('POST /api/categories', () => {
+    it('401s when the Authorization header is missing', async () => {
+      const response = await POST(
+        makeRequest('POST', 'http://localhost/api/categories', {
+          body: { name: 'Food', emoji: '🍔' },
+        })
+      )
+      expect(response.status).toBe(401)
+      expect(prisma.category.create).not.toHaveBeenCalled()
+    })
+
+    it('429s when the rate limit is exceeded, without calling the service', async () => {
+      vi.mocked(prisma.rateLimitBucket.upsert).mockResolvedValue({
+        count: 101,
+      } as never)
+      const token = await signToken()
+
+      const response = await POST(
+        makeRequest('POST', 'http://localhost/api/categories', {
+          token,
+          body: { name: 'Food', emoji: '🍔' },
+        })
+      )
+      expect(response.status).toBe(429)
+      expect(prisma.category.create).not.toHaveBeenCalled()
+    })
+
     it('201s and wraps the created category, defaulting color when omitted', async () => {
       const token = await signToken()
       vi.mocked(prisma.category.create).mockResolvedValue({
@@ -220,6 +277,36 @@ describe('categories routes', () => {
   })
 
   describe('PATCH /api/categories/:id', () => {
+    const patchId = 'cltest0000000000000000000'
+
+    it('401s when the Authorization header is missing', async () => {
+      const response = await PATCH(
+        makeRequest('PATCH', `http://localhost/api/categories/${patchId}`, {
+          body: { name: 'Groceries' },
+        }),
+        { params: Promise.resolve({ id: patchId }) }
+      )
+      expect(response.status).toBe(401)
+      expect(prisma.category.update).not.toHaveBeenCalled()
+    })
+
+    it('429s when the rate limit is exceeded, without calling the service', async () => {
+      vi.mocked(prisma.rateLimitBucket.upsert).mockResolvedValue({
+        count: 101,
+      } as never)
+      const token = await signToken()
+
+      const response = await PATCH(
+        makeRequest('PATCH', `http://localhost/api/categories/${patchId}`, {
+          token,
+          body: { name: 'Groceries' },
+        }),
+        { params: Promise.resolve({ id: patchId }) }
+      )
+      expect(response.status).toBe(429)
+      expect(prisma.category.update).not.toHaveBeenCalled()
+    })
+
     it('400s with "Invalid category ID" for a non-cuid id, before checking the body', async () => {
       const token = await signToken()
       const response = await PATCH(
@@ -312,6 +399,31 @@ describe('categories routes', () => {
   describe('DELETE /api/categories/:id', () => {
     const id = 'cltest0000000000000000000'
 
+    it('401s when the Authorization header is missing', async () => {
+      const response = await DELETE(
+        makeRequest('DELETE', `http://localhost/api/categories/${id}`),
+        { params: Promise.resolve({ id }) }
+      )
+      expect(response.status).toBe(401)
+      expect(prisma.category.delete).not.toHaveBeenCalled()
+    })
+
+    it('429s when the rate limit is exceeded, without calling the service', async () => {
+      vi.mocked(prisma.rateLimitBucket.upsert).mockResolvedValue({
+        count: 101,
+      } as never)
+      const token = await signToken()
+
+      const response = await DELETE(
+        makeRequest('DELETE', `http://localhost/api/categories/${id}`, {
+          token,
+        }),
+        { params: Promise.resolve({ id }) }
+      )
+      expect(response.status).toBe(429)
+      expect(prisma.category.delete).not.toHaveBeenCalled()
+    })
+
     it('404s when the category is not owned', async () => {
       const token = await signToken()
       vi.mocked(prisma.category.findFirst).mockResolvedValue(null)
@@ -382,6 +494,26 @@ describe('categories routes', () => {
       expect(response.status).toBe(204)
       const text = await response.text()
       expect(text).toBe('')
+    })
+
+    it('500s with the standardized envelope when the rate limiter itself throws, rather than crashing', async () => {
+      vi.mocked(prisma.rateLimitBucket.upsert).mockRejectedValue(
+        new Error('connection lost')
+      )
+      const token = await signToken()
+
+      const response = await DELETE(
+        makeRequest('DELETE', `http://localhost/api/categories/${id}`, {
+          token,
+        }),
+        { params: Promise.resolve({ id }) }
+      )
+      expect(response.status).toBe(500)
+      const body = await response.json()
+      expect(body.error).toEqual({
+        code: 'INTERNAL_ERROR',
+        message: 'An unexpected error occurred',
+      })
     })
   })
 })

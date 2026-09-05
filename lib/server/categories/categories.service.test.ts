@@ -10,6 +10,7 @@ import {
   CreateCategoryBodySchema,
   UpdateCategoryBodySchema,
   CategoryParamsSchema,
+  type CreateCategoryBody,
 } from './categories.schema'
 
 function createMockPrisma() {
@@ -63,15 +64,29 @@ describe('listCategories', () => {
 })
 
 describe('createCategory', () => {
-  it('creates with the given fields, defaulting color when omitted', async () => {
+  it('creates with the given fields, passing color through when provided', async () => {
     const prisma = createMockPrisma()
     prisma.category.create.mockResolvedValue({ id: 'cat1', name: 'Food' })
 
     await createCategory(prisma, 'user42', {
       name: 'Food',
       emoji: '🍔',
-      color: '#6366f1',
+      color: '#ff0000',
     })
+
+    expect(prisma.category.create).toHaveBeenCalledWith({
+      data: { name: 'Food', emoji: '🍔', color: '#ff0000', userId: 'user42' },
+    })
+  })
+
+  it('falls back to the default color when the caller omits it (defensive — the schema normally fills this in before the service is called)', async () => {
+    const prisma = createMockPrisma()
+    prisma.category.create.mockResolvedValue({ id: 'cat1', name: 'Food' })
+
+    await createCategory(prisma, 'user42', {
+      name: 'Food',
+      emoji: '🍔',
+    } as CreateCategoryBody)
 
     expect(prisma.category.create).toHaveBeenCalledWith({
       data: { name: 'Food', emoji: '🍔', color: '#6366f1', userId: 'user42' },

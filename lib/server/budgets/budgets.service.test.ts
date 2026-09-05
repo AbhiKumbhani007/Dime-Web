@@ -129,6 +129,32 @@ describe('listBudgets', () => {
     expect(prisma.transaction.groupBy).toHaveBeenCalledTimes(2)
   })
 
+  it('attributes spend to the correct budget when two budgets share a type but not a category', async () => {
+    const CAT_ID_2 = 'clcategory1111111111111111111'
+
+    const prisma = createMockPrisma()
+    prisma.budget.findMany.mockResolvedValue([
+      makeBudget({ id: 'clb1', categoryId: CAT_ID, amount: 1000 }),
+      makeBudget({ id: 'clb2', categoryId: CAT_ID_2, amount: 2000 }),
+    ])
+    prisma.transaction.groupBy.mockResolvedValue([
+      { categoryId: CAT_ID, _sum: { amount: 300 } },
+      { categoryId: CAT_ID_2, _sum: { amount: 1200 } },
+    ])
+
+    const [budget1, budget2] = await listBudgets(
+      prisma,
+      'user1',
+      new Date(2026, 3, 15)
+    )
+
+    // One grouped query for the shared MONTHLY type, but each budget must look
+    // up its own category's sum rather than the other's.
+    expect(prisma.transaction.groupBy).toHaveBeenCalledTimes(1)
+    expect(budget1.spent).toBe(300)
+    expect(budget2.spent).toBe(1200)
+  })
+
   it('allows percent to exceed 100 and remaining to go negative when overspent', async () => {
     const prisma = createMockPrisma()
 

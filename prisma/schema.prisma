@@ -1,0 +1,173 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Auth ────────────────────────────────────────────────────────────────────
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String?
+  passwordHash String?
+  theme        String   @default("system")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  transactions  Transaction[]
+  categories    Category[]
+  budgets       Budget[]
+  templates     Template[]
+  ledgerPersons LedgerPerson[]
+  ledgerEntries LedgerEntry[]
+  refreshTokens RefreshToken[]
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ─── Expense Tracking ─────────────────────────────────────────────────────────
+
+model Category {
+  id        String   @id @default(cuid())
+  name      String
+  emoji     String
+  color     String   @default("#6366f1")
+  isDefault Boolean  @default(false)
+  userId    String
+  createdAt DateTime @default(now())
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+  budgets      Budget[]
+  templates    Template[]
+
+  @@unique([userId, name])
+}
+
+model Transaction {
+  id         String   @id @default(cuid())
+  amount     Float
+  date       DateTime
+  note       String?
+  isIncome   Boolean  @default(false)
+  userId     String
+  categoryId String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id])
+
+  @@index([userId, date])
+  @@index([userId, categoryId])
+}
+
+model Budget {
+  id         String     @id @default(cuid())
+  name       String
+  emoji      String
+  colour     String     @default("#6366f1")
+  type       BudgetType
+  amount     Float
+  startDate  DateTime   @default(now())
+  userId     String
+  categoryId String
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id])
+}
+
+model Template {
+  id         String    @id @default(cuid())
+  label      String
+  emoji      String    @default("🧾")
+  amount     Float?
+  note       String?
+  isIncome   Boolean   @default(false)
+  usageCount Int       @default(0)
+  lastUsedAt DateTime?
+  userId     String
+  categoryId String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt @default(now())
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, label])
+  @@index([userId])
+}
+
+enum BudgetType {
+  DAILY
+  WEEKLY
+  MONTHLY
+  YEARLY
+}
+
+// ─── Ledger ───────────────────────────────────────────────────────────────────
+
+model LedgerPerson {
+  id        String   @id @default(cuid())
+  name      String
+  phone     String?
+  note      String?
+  color     String   @default("#6366f1")
+  userId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user    User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  entries LedgerEntry[]
+}
+
+model LedgerEntry {
+  id        String          @id @default(cuid())
+  amount    Float
+  type      LedgerEntryType
+  date      DateTime
+  note      String?
+  settled   Boolean         @default(false)
+  settledAt DateTime?
+  personId  String
+  userId    String
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  person LedgerPerson @relation(fields: [personId], references: [id], onDelete: Cascade)
+  user   User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, settled])
+  @@index([personId])
+}
+
+enum LedgerEntryType {
+  GAVE
+  RECEIVED
+}
+
+// ─── Rate limiting ─────────────────────────────────────────────────────────────
+// dime-api never reads or writes this table — added fresh by dime-web, additive only.
+
+model RateLimitBucket {
+  id          String   @id @default(cuid())
+  key         String
+  windowStart DateTime
+  count       Int      @default(1)
+
+  @@unique([key, windowStart])
+}

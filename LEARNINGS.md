@@ -56,6 +56,15 @@ Uint8Array. Received an instance of Uint8Array"` when run in Vitest's default `j
   `"Invalid input: expected string, received undefined"`); status codes, envelopes, and every
   **custom** validation message (`.min(1, '...')`, `.regex(..., '...')`) are unaffected — this is a
   library-version difference, not a port regression.
+- **`tdd.md`'s API contracts table had the same "documented as bare, actually wrapped" mistake for
+  budgets that F1 already found and fixed for categories** — `POST`/`PATCH /api/budgets*` were
+  documented as returning a bare `Budget`, and `GET /api/budgets/:id/progress` as a bare
+  `BudgetProgress`. Live-verified (real `curl` against a running `dime-web` dev server) during F3: both
+  are wrapped/nested exactly like `dime-api`'s source and `dime-web`'s already-shipped `lib/api/budgets.ts`
+  predicted — `{budget: Budget}` for POST/PATCH, and progress merges `budget` in alongside the flat
+  `spent`/`remaining`/`percent`/`daysRemaining`/`periodStart`/`periodEnd` fields. Worth checking this
+  same "bare vs. wrapped" class of error on every remaining un-ported module's contract-table row before
+  trusting it.
 - **`e2e/categories.spec.ts:50`'s `expect(body.error).toMatch(/used/i)` assumes the old flat error
   shape** (`{error: "..."}`). Once a route returns the standardized `{error:{code,message}}` envelope,
   `body.error` is an object and `toMatch` fails — the assertion needs to become

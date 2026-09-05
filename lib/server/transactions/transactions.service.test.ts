@@ -288,7 +288,7 @@ describe('createTransaction', () => {
     categoryId: VALID_CATEGORY_ID,
   }
 
-  it("checks category ownership via category.findFirst({id, userId}) inside the transaction", async () => {
+  it('checks category ownership via category.findFirst({id, userId}) inside the transaction', async () => {
     const prisma = createMockPrisma()
     prisma.category.findFirst.mockResolvedValue({
       id: VALID_CATEGORY_ID,

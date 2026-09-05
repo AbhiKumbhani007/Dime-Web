@@ -95,7 +95,10 @@ describe('listTemplates', () => {
 describe('createTemplate', () => {
   it('creates with all fields when categoryId is provided and owned', async () => {
     const prisma = createMockPrisma()
-    prisma.category.findFirst.mockResolvedValue({ id: 'cat1', userId: 'user42' })
+    prisma.category.findFirst.mockResolvedValue({
+      id: 'cat1',
+      userId: 'user42',
+    })
     prisma.template.create.mockResolvedValue({ id: 'tpl1', label: 'Coffee' })
 
     await createTemplate(prisma, 'user42', {
@@ -175,7 +178,9 @@ describe('createTemplate', () => {
     prisma.template.create.mockRejectedValue(uniqueConstraintError)
 
     await expect(
-      createTemplate(prisma, 'user42', { label: 'Coffee' } as CreateTemplateBody)
+      createTemplate(prisma, 'user42', {
+        label: 'Coffee',
+      } as CreateTemplateBody)
     ).rejects.toEqual({ code: 'DUPLICATE_LABEL' })
   })
 
@@ -185,7 +190,9 @@ describe('createTemplate', () => {
     prisma.template.create.mockRejectedValue(dbError)
 
     await expect(
-      createTemplate(prisma, 'user42', { label: 'Coffee' } as CreateTemplateBody)
+      createTemplate(prisma, 'user42', {
+        label: 'Coffee',
+      } as CreateTemplateBody)
     ).rejects.toBe(dbError)
   })
 })
@@ -204,7 +211,10 @@ describe('updateTemplate', () => {
 
   it('updates with the merged patch data when owned and no categoryId in the patch', async () => {
     const prisma = createMockPrisma()
-    prisma.template.findFirst.mockResolvedValue({ id: 'tpl1', userId: 'user42' })
+    prisma.template.findFirst.mockResolvedValue({
+      id: 'tpl1',
+      userId: 'user42',
+    })
     prisma.template.update.mockResolvedValue({ id: 'tpl1', label: 'Latte' })
 
     await updateTemplate(prisma, 'user42', 'tpl1', { label: 'Latte' })
@@ -222,7 +232,10 @@ describe('updateTemplate', () => {
 
   it('throws a 404 and never calls update when the patched categoryId is not owned', async () => {
     const prisma = createMockPrisma()
-    prisma.template.findFirst.mockResolvedValue({ id: 'tpl1', userId: 'user42' })
+    prisma.template.findFirst.mockResolvedValue({
+      id: 'tpl1',
+      userId: 'user42',
+    })
     prisma.category.findFirst.mockResolvedValue(null)
 
     await expect(
@@ -233,7 +246,10 @@ describe('updateTemplate', () => {
 
   it('clears categoryId via explicit null without a category-ownership check', async () => {
     const prisma = createMockPrisma()
-    prisma.template.findFirst.mockResolvedValue({ id: 'tpl1', userId: 'user42' })
+    prisma.template.findFirst.mockResolvedValue({
+      id: 'tpl1',
+      userId: 'user42',
+    })
     prisma.template.update.mockResolvedValue({ id: 'tpl1', categoryId: null })
 
     await updateTemplate(prisma, 'user42', 'tpl1', { categoryId: null })
@@ -248,7 +264,10 @@ describe('updateTemplate', () => {
 
   it('throws a DUPLICATE_LABEL code on a unique-constraint violation', async () => {
     const prisma = createMockPrisma()
-    prisma.template.findFirst.mockResolvedValue({ id: 'tpl1', userId: 'user42' })
+    prisma.template.findFirst.mockResolvedValue({
+      id: 'tpl1',
+      userId: 'user42',
+    })
     prisma.template.update.mockRejectedValue(uniqueConstraintError)
 
     await expect(
@@ -262,19 +281,24 @@ describe('deleteTemplate', () => {
     const prisma = createMockPrisma()
     prisma.template.findFirst.mockResolvedValue(null)
 
-    await expect(deleteTemplate(prisma, 'user42', 'tpl1')).rejects.toMatchObject(
-      { statusCode: 404, message: 'Template not found' }
-    )
+    await expect(
+      deleteTemplate(prisma, 'user42', 'tpl1')
+    ).rejects.toMatchObject({ statusCode: 404, message: 'Template not found' })
     expect(prisma.template.delete).not.toHaveBeenCalled()
   })
 
   it('deletes when owned', async () => {
     const prisma = createMockPrisma()
-    prisma.template.findFirst.mockResolvedValue({ id: 'tpl1', userId: 'user42' })
+    prisma.template.findFirst.mockResolvedValue({
+      id: 'tpl1',
+      userId: 'user42',
+    })
 
     await deleteTemplate(prisma, 'user42', 'tpl1')
 
-    expect(prisma.template.delete).toHaveBeenCalledWith({ where: { id: 'tpl1' } })
+    expect(prisma.template.delete).toHaveBeenCalledWith({
+      where: { id: 'tpl1' },
+    })
   })
 })
 
@@ -288,9 +312,9 @@ describe('templates schemas', () => {
   })
 
   it('accepts a patch with at least one field', () => {
-    expect(
-      UpdateTemplateBodySchema.safeParse({ label: 'Latte' }).success
-    ).toBe(true)
+    expect(UpdateTemplateBodySchema.safeParse({ label: 'Latte' }).success).toBe(
+      true
+    )
   })
 
   it('rejects a missing label on create (Zod v4 default type-error message, not the custom .min() one — see LEARNINGS.md)', () => {

@@ -16,7 +16,11 @@ export const CreateTemplateBodySchema = z.object({
     .optional()
     .default('🧾'),
   amount: AmountSchema.optional().nullable(),
-  note: z.string().trim().max(500, 'Note must be at most 500 characters').optional(),
+  note: z
+    .string()
+    .trim()
+    .max(500, 'Note must be at most 500 characters')
+    .optional(),
   isIncome: z.boolean().optional().default(false),
   categoryId: z.cuid('Invalid category ID').optional(),
 })

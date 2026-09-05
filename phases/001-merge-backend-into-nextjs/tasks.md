@@ -26,10 +26,17 @@ stands as the completeness check either way.
 Chosen as the pilot per the TDD's own sequencing rationale: smallest surface, exercises every piece of
 Foundational plumbing against a real module before the rest proceed in parallel.
 
-- [ ] T009 [P] [US1] [TEST] Port categories service + schema + tests (near-verbatim — `categories.service.ts` takes `prisma` as a plain argument, no framework coupling) `lib/server/categories/categories.service.ts`, `lib/server/categories/categories.schema.ts`, `lib/server/categories/categories.service.test.ts` (after T007)
-- [ ] T010 [US1] [TEST] Implement health + categories route handlers and their contract tests — `GET /api/health`, `GET/POST /api/categories`, `PATCH/DELETE /api/categories/:id`; preserve the live-verified `{categories: [...]}` envelope (not a bare array) `app/api/health/route.ts`, `app/api/categories/route.ts`, `app/api/categories/[id]/route.ts`, `app/api/health/route.test.ts`, `app/api/categories/categories.routes.test.ts` (after T003, T004, T005, T006, T009)
+- [X] T009 [P] [US1] [TEST] Port categories service + schema + tests (near-verbatim — `categories.service.ts` takes `prisma` as a plain argument, no framework coupling) `lib/server/categories/categories.service.ts`, `lib/server/categories/categories.schema.ts`, `lib/server/categories/categories.service.test.ts` (after T007)
+- [X] T010 [US1] [TEST] Implement health + categories route handlers and their contract tests — `GET /api/health`, `GET/POST /api/categories`, `PATCH/DELETE /api/categories/:id`; preserve the live-verified `{categories: [...]}` envelope (not a bare array) `app/api/health/route.ts`, `app/api/categories/route.ts`, `app/api/categories/[id]/route.ts`, `app/api/health/route.test.ts`, `app/api/categories/categories.routes.test.ts` (after T003, T004, T005, T006, T009)
 
-**Checkpoint:** dime-web serves `/api/health` and every `/api/categories*` endpoint with contract parity to dime-api (verified by `e2e/categories.spec.ts` pointed at dime-web while every other module still runs on dime-api). Every shared-plumbing piece has now been exercised by a real, deployed route for the first time.
+**Checkpoint:** dime-web serves `/api/health` and every `/api/categories*` endpoint with contract parity
+to dime-api, including the F0 rate limiter now wired in (`/api/categories*` limited, `/api/health`
+exempt) — verified by `categories.routes.test.ts`/`health/route.test.ts` plus a manual curl session
+against a running dime-web dev server (see `phases/001-merge-backend-into-nextjs/tickets/F1.md`). Every
+shared-plumbing piece has now been exercised by a real, deployed route for the first time. **Corrected
+during F1**: the original checkpoint named `e2e/categories.spec.ts` pointed at dime-web, which turned
+out to be infeasible until auth is ported in Feature 7 (see `tdd.md`'s "Done for this phase" list and
+`LEARNINGS.md`) — that retarget is `T027`'s job.
 
 ## Feature 2: Transactions
 

@@ -42,12 +42,26 @@ Things worth knowing before touching this codebase. `ticket`/`tdd` read this bef
   corrected in `tdd.md`'s Architecture table rather than left as a stale "matches dime-api" claim.
 - **`jose`'s WebCrypto key handling fails under jsdom** — `SignJWT`/`jwtVerify` throw
   `"Key for the HS256 algorithm must be one of type CryptoKey, KeyObject, JSON Web Key, or
-  Uint8Array. Received an instance of Uint8Array"` when run in Vitest's default `jsdom` environment,
+Uint8Array. Received an instance of Uint8Array"` when run in Vitest's default `jsdom` environment,
   because jsdom's `Uint8Array`/crypto globals are a different realm than Node's and fail jose's
   `instanceof` checks. `lib/server/**` code targets the Node runtime anyway (per `tdd.md`'s Context
   table), so any test file that imports `jose` (or anything that transitively does) needs
   `// @vitest-environment node` as its first line — this repo has no global `node` environment
   carve-out, so it's per-file, not automatic.
+- **Zod v4 renamed `SafeParseError.error.errors` to `.issues`.** `dime-api`'s route handlers read
+  `parsed.error.errors[0]?.message` — under the installed `zod@4.3.6`, `.errors` is `undefined`, so a
+  naive port turns every 400-validation path into an unhandled `TypeError` (a 500). Also note: v4's
+  _default_ message for a missing required field differs from the v3 fixture captured in
+  `phases/001-merge-backend-into-nextjs/fixtures/README.md` (`"Required"` → a longer v4 default like
+  `"Invalid input: expected string, received undefined"`); status codes, envelopes, and every
+  **custom** validation message (`.min(1, '...')`, `.regex(..., '...')`) are unaffected — this is a
+  library-version difference, not a port regression.
+- **`e2e/categories.spec.ts:50`'s `expect(body.error).toMatch(/used/i)` assumes the old flat error
+  shape** (`{error: "..."}`). Once a route returns the standardized `{error:{code,message}}` envelope,
+  `body.error` is an object and `toMatch` fails — the assertion needs to become
+  `expect(body.error.message).toMatch(/used/i)`. Not fixed yet: this spec still runs entirely against
+  `dime-api` (unaffected today) and is only retargeted at `dime-web` in `T027`, after auth is ported in
+  Feature 7 — recorded here now so the fix isn't rediscovered from a red CI run later.
 
 ## Tooling
 

@@ -110,7 +110,10 @@ export function TemplateForm({ open, onOpenChange, template, onSuccess }: Templa
             label: values.label,
             emoji: values.emoji,
             amount: values.amount,
-            note: values.note || undefined,
+            // Unlike create, PATCH's note is nullable — an emptied note must
+            // be sent as `null` to actually clear it, not omitted (omission
+            // means "unchanged" server-side).
+            note: values.note ? values.note : null,
             isIncome: values.isIncome,
             categoryId: values.categoryId ? values.categoryId : null,
           },

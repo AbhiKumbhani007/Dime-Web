@@ -53,8 +53,8 @@ originally documented — the identical class of correction F1 made for categori
 
 ## Feature 3: Budgets
 
-- [ ] T013 [P] [US3] [TEST] Port budgets service + period helper + schema + tests `lib/server/budgets/budgets.service.ts`, `lib/server/budgets/budgets.period.ts`, `lib/server/budgets/budgets.schema.ts`, `lib/server/budgets/budgets.service.test.ts`, `lib/server/budgets/budgets.period.test.ts` (after T007, T010)
-- [ ] T014 [P] [US3] [TEST] Implement budgets route handlers + tests — `GET/POST /api/budgets`, `PATCH/DELETE /api/budgets/:id`, `GET /api/budgets/:id/progress`; preserve the live-verified `{budgets: [...]}` envelope and the `colour` (British spelling) field name `app/api/budgets/route.ts`, `app/api/budgets/[id]/route.ts`, `app/api/budgets/[id]/progress/route.ts`, `app/api/budgets/budgets.routes.test.ts` (after T003, T004, T005, T006, T013)
+- [X] T013 [P] [US3] [TEST] Port budgets service + period helper + schema + tests `lib/server/budgets/budgets.service.ts`, `lib/server/budgets/budgets.period.ts`, `lib/server/budgets/budgets.schema.ts`, `lib/server/budgets/budgets.service.test.ts`, `lib/server/budgets/budgets.period.test.ts` (after T007, T010)
+- [X] T014 [P] [US3] [TEST] Implement budgets route handlers + tests — `GET/POST /api/budgets`, `PATCH/DELETE /api/budgets/:id`, `GET /api/budgets/:id/progress`; preserve the live-verified `{budgets: [...]}` envelope and the `colour` (British spelling) field name `app/api/budgets/route.ts`, `app/api/budgets/[id]/route.ts`, `app/api/budgets/[id]/progress/route.ts`, `app/api/budgets/budgets.routes.test.ts` (after T003, T004, T005, T006, T013)
 
 **Checkpoint:** budgets, including computed per-period progress, are fully served by dime-web.
 

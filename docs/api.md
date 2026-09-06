@@ -31,3 +31,31 @@ per `RATE_LIMIT_WINDOW_SECONDS`, see `docs/operations.md`).
 none of these endpoints return a bare array or object. `POST`/`PATCH` returning `{category}` rather than
 a bare `Category` was a `phases/001-merge-backend-into-nextjs/tdd.md` correction made while shipping
 this pair; see that document's API contracts table for the full history.
+
+## Transactions
+
+All five endpoints require a bearer token (`Authorization: Bearer <token>`) and are subject to the
+global rate limit, same as Categories.
+
+| Method | Path                    | Request                                                                   | Success                                              | Errors                                                             |
+| ------ | ----------------------- | -------------------------------------------------------------------------- | ----------------------------------------------------- | -------------------------------------------------------------------- |
+| GET    | `/api/transactions`     | query: `categoryId?, isIncome?, search?, from?, to?, limit?(<=100), cursor?` | `200 { items: Transaction[], nextCursor: string\|null }` | `401`, `429`                                                        |
+| POST   | `/api/transactions`     | `{ amount, date, note?, isIncome, categoryId, templateId? }`               | `201 { transaction: Transaction }`                    | `400` (validation), `401`, `404` (category not owned), `429`       |
+| GET    | `/api/transactions/:id` | —                                                                          | `200 { transaction: Transaction }`                    | `400` (invalid id), `401`, `404`, `429`                             |
+| PATCH  | `/api/transactions/:id` | partial `{ amount?, date?, note?, isIncome?, categoryId? }`                | `200 { transaction: Transaction }`                    | `400` (invalid id, empty body, or new categoryId not owned → `404`), `401`, `404`, `429` |
+| DELETE | `/api/transactions/:id` | —                                                                          | `204` (no body)                                       | `400` (invalid id), `401`, `404`, `429`                             |
+
+**Note on envelopes:** the list endpoint returns `{items, nextCursor}` unwrapped; every single-transaction
+response (`POST`/`GET :id`/`PATCH`) wraps its payload as `{transaction}`. `phases/001-merge-backend-into-nextjs/tdd.md`'s
+contracts table originally documented `POST`/`GET :id`/`PATCH` as returning a bare `Transaction` — that was
+wrong (dime-api's actual source and dime-web's already-shipped frontend client both wrap it), corrected
+during F2; see `phases/001-merge-backend-into-nextjs/tickets/F2.md`'s Decisions table.
+
+**`templateId` on create** is a write-time signal only — it is never persisted on the `Transaction` record.
+If it references a template owned by the caller, that template's `usageCount` is incremented and
+`lastUsedAt` is stamped; if it references an unowned or unknown template, the create still succeeds and the
+bump silently no-ops.
+
+**`note` cannot be cleared via `PATCH`** — `{note: null}` is rejected with `400` (the schema has no
+`.nullable()`). This is a known, deliberately-preserved gap carried over from `dime-api`, not a missed
+case; see F2.md's Decisions table.

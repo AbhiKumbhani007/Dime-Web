@@ -107,3 +107,43 @@ update. Clearing `categoryId` via `null` skips the ownership check a non-null va
 **The `usageCount`/`lastUsedAt` bump on transaction create is not implemented here** — it belongs to the
 transactions module (Feature 2), which increments a referenced template's counters as a write-time side
 effect and never persists `templateId` on the transaction itself.
+
+## Analytics
+
+All six endpoints require a bearer token and are subject to the global rate limit, same as Categories.
+Every endpoint is read-only — there is no `POST`/`PATCH`/`DELETE` anywhere in this module, and none of the
+six can 404 or 409 (they read only the caller's own transactions/budgets, scoped by `userId`, never a
+specific resource by id).
+
+| Method | Path                                | Request                                    | Success                                                                                        | Errors                |
+| ------ | ----------------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------ | ---------------------- |
+| GET    | `/api/analytics/overview`           | query: `from?, to?`                         | `200` flat `{totalIncome, totalExpense, netBalance, transactionCount, avgDailySpend, from, to}`   | `400` (bad date), `401`, `429` |
+| GET    | `/api/analytics/by-period`          | query: `period(weekly\|monthly\|yearly), date?, categoryId?` | `200` flat `{period, labels: string[], income: number[], expense: number[], net: number[], from, to}` | `400` (bad `period`/`categoryId`), `401`, `429` |
+| GET    | `/api/analytics/by-category`        | query: `from?, to?, isIncome?`              | `200 { categories: CategoryBreakdownRow[] }` — each `{category: {id,name,emoji,color}\|null, total, percent, count}` | `400` (bad date), `401`, `429` |
+| GET    | `/api/analytics/trends`             | query: `months?(default 6, max 36)`         | `200 { trends: TrendRow[] }` — each `{month: "YYYY-MM", income, expense, net}`, oldest first     | `400` (bad `months`), `401`, `429` |
+| GET    | `/api/analytics/top-days`           | query: `from?, to?, limit?(default 10, max 100)` | `200 { days: TopDayRow[] }` — each `{date: "YYYY-MM-DD", total}`, expense-only, sorted descending | `400` (bad date/`limit`), `401`, `429` |
+| GET    | `/api/analytics/budget-vs-actual`   | —                                            | `200 { budgets: BudgetVsActualRow[] }` — each `{budget: {id,name,emoji,type}, allocated, spent, remaining, percent}` | `401`, `429`           |
+
+**`by-period`'s query params and response shape are not what `tdd.md` originally documented** — it had
+`bucket(weekly|monthly|yearly),from?,to?` in and an unspecified "series array" out. The actual contract
+(param named `period`, a single `date` instead of a range, plus an optional `categoryId` filter; a flat
+object of parallel arrays out, not an array of rows) matches `dime-web`'s already-shipped
+`lib/api/analytics.ts`/`hooks/useAnalytics.ts`, which the insights page already calls this way in
+production. Corrected during F5 — see `phases/001-merge-backend-into-nextjs/tickets/F5.md`'s Decisions
+table. Same class of "TDD documented the wrong shape" correction F1 through F4 each made once for their
+own module.
+
+**Bucketing for `by-period`:** `weekly` → 7 daily buckets, Monday–Sunday, labelled `Mon`…`Sun`; `monthly` →
+one daily bucket per day of the reference calendar month, labelled by day number; `yearly` → 12 monthly
+buckets across the reference calendar year, labelled `Jan`…`Dec`. Only the weekly label format has a live
+fixture (`__tests__/insights.test.tsx`); monthly/yearly are `tickets/F5.md`'s own, undisputed but
+unverified-against-a-fixture, choice.
+
+**`from`/`to` default to the Unix epoch and "now" (i.e. unbounded) when omitted**, on `overview`,
+`by-category`, and `top-days` alike — the shipped frontend always supplies both in practice, so this path
+has no live evidence either way; see `tickets/F5.md`'s Decisions table.
+
+**`top-days` and `budget-vs-actual`'s "spend"/"actual" both mean expense-only** (`isIncome: false`),
+matching `budgets.service.ts`'s own definition of spend. `budget-vs-actual` reuses `listBudgets` (Feature
+3) for the underlying computation but maps its rows into a narrower shape than `GET /api/budgets` returns
+— no `category`, `daysRemaining`, `periodStart`/`periodEnd`, and `amount` renamed `allocated`.

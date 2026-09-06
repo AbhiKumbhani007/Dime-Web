@@ -60,10 +60,14 @@ originally documented — the identical class of correction F1 made for categori
 
 ## Feature 4: Templates
 
-- [ ] T015 [P] [US4] [TEST] Port templates service + schema + tests `lib/server/templates/templates.service.ts`, `lib/server/templates/templates.schema.ts`, `lib/server/templates/templates.service.test.ts` (after T007, T010)
-- [ ] T016 [P] [US4] [TEST] Implement templates route handlers + tests — `GET/POST /api/templates`, `PATCH/DELETE /api/templates/:id`; preserve the live-verified `{templates: [...]}` envelope `app/api/templates/route.ts`, `app/api/templates/[id]/route.ts`, `app/api/templates/templates.routes.test.ts` (after T003, T004, T005, T006, T015)
+- [X] T015 [P] [US4] [TEST] Port templates service + schema + tests `lib/server/templates/templates.service.ts`, `lib/server/templates/templates.schema.ts`, `lib/server/templates/templates.service.test.ts` (after T007, T010)
+- [X] T016 [P] [US4] [TEST] Implement templates route handlers + tests — `GET/POST /api/templates`, `PATCH/DELETE /api/templates/:id`; preserve the live-verified `{templates: [...]}` envelope `app/api/templates/route.ts`, `app/api/templates/[id]/route.ts`, `app/api/templates/templates.routes.test.ts` (after T003, T004, T005, T006, T015)
 
-**Checkpoint:** templates (quick-add chips) are fully served by dime-web.
+**Checkpoint:** templates (quick-add chips) are fully served by dime-web — verified by
+`templates.service.test.ts`/`templates.routes.test.ts` plus a manual curl session against a running
+dime-web dev server (see `phases/001-merge-backend-into-nextjs/tickets/F4.md`). **Corrected during F4**:
+the `POST`/`PATCH` envelope is `{template}` (wrapped), not the bare `Template` `tdd.md` originally
+documented — the identical class of correction F1 made for categories and F2 made for transactions.
 
 ## Feature 5: Analytics
 

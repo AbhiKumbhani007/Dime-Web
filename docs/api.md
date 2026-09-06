@@ -81,3 +81,29 @@ corrections made while shipping this feature (F3) — the design doc had inherit
 "documented bare, actually wrapped" mistake F1 already found and fixed for categories. See that
 document's API contracts table for the full history. Unlike categories, budgets have no uniqueness or
 in-use constraint, so there is no `409` case anywhere in this module.
+
+## Templates
+
+All four endpoints require a bearer token (`Authorization: Bearer <token>`) and are subject to the global
+rate limit, same as Categories.
+
+| Method | Path                 | Request body                                                         | Success                         | Errors                                                                                    |
+| ------ | -------------------- | -------------------------------------------------------------------- | ------------------------------- | ----------------------------------------------------------------------------------------- |
+| GET    | `/api/templates`     | query: `sort?(usage\|recent\|label)`, defaults to `usage`            | `200 { templates: Template[] }` | `400` (invalid `sort`), `401`, `429`                                                      |
+| POST   | `/api/templates`     | `{ label, emoji?, amount?, note?, isIncome?, categoryId? }`          | `201 { template: Template }`    | `400` (validation), `401`, `404` (`categoryId` not owned), `409` (duplicate label), `429` |
+| PATCH  | `/api/templates/:id` | partial `{ label?, emoji?, amount?, note?, isIncome?, categoryId? }` | `200 { template: Template }`    | `400` (invalid id or empty body), `401`, `404`, `409` (duplicate label), `429`            |
+| DELETE | `/api/templates/:id` | —                                                                    | `204` (no body)                 | `400` (invalid id), `401`, `404`, `429`                                                   |
+
+**Note on envelopes:** `POST`/`PATCH` return `{template: Template}` (wrapped), not a bare `Template`.
+`phases/001-merge-backend-into-nextjs/tdd.md`'s contracts table originally documented them as bare — that
+was wrong (dime-api's actual source and dime-web's already-shipped frontend client both wrap it), corrected
+during F4; see `phases/001-merge-backend-into-nextjs/tickets/F4.md`'s Decisions table. The identical class
+of correction F1 made for categories.
+
+**`amount`/`note`/`categoryId` are nullable on `PATCH` but not on `POST`** — a template can be created
+without them (simply omitted) but an existing value can only be explicitly cleared via `null` through an
+update. Clearing `categoryId` via `null` skips the ownership check a non-null value triggers.
+
+**The `usageCount`/`lastUsedAt` bump on transaction create is not implemented here** — it belongs to the
+transactions module (Feature 2), which increments a referenced template's counters as a write-time side
+effect and never persists `templateId` on the transaction itself.

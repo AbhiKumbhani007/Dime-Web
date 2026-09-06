@@ -71,6 +71,14 @@ Uint8Array. Received an instance of Uint8Array"` when run in Vitest's default `j
   `expect(body.error.message).toMatch(/used/i)`. Not fixed yet: this spec still runs entirely against
   `dime-api` (unaffected today) and is only retargeted at `dime-web` in `T027`, after auth is ported in
   Feature 7 — recorded here now so the fix isn't rediscovered from a red CI run later.
+- **Zod v4's `z.enum(values, {errorMap})` silently no-ops instead of throwing.** `dime-api`'s v3-era
+  `SortQuerySchema` (templates' `sort` query param) attaches a custom invalid-value message via
+  `{errorMap: () => ({message: '...'})}`. Under the installed `zod@4.3.6` this doesn't error — it just
+  discards the custom message and falls back to v4's generic `"Invalid option: expected one of ..."`.
+  Confirmed directly with `node -e`. The v4 equivalent is the top-level `{error: '...'}` option (the
+  same API `AmountSchema` in `common.schema.ts` already uses). Unlike the `.errors`→`.issues` rename
+  above, this doesn't throw or fail a naive port's tests unless the test asserts the actual message
+  text, not just pass/fail — write that assertion for any v3→v4 enum port.
 
 ## Tooling
 

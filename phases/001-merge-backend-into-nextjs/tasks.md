@@ -40,10 +40,16 @@ out to be infeasible until auth is ported in Feature 7 (see `tdd.md`'s "Done for
 
 ## Feature 2: Transactions
 
-- [ ] T011 [P] [US2] [TEST] Port transactions service + schema + tests `lib/server/transactions/transactions.service.ts`, `lib/server/transactions/transactions.schema.ts`, `lib/server/transactions/transactions.service.test.ts` (after T007, T010)
-- [ ] T012 [P] [US2] [TEST] Implement transactions route handlers + tests — `GET/POST /api/transactions`, `GET/PATCH/DELETE /api/transactions/:id`; preserve the live-verified `{items, nextCursor}` envelope `app/api/transactions/route.ts`, `app/api/transactions/[id]/route.ts`, `app/api/transactions/transactions.routes.test.ts` (after T003, T004, T005, T006, T011)
+- [X] T011 [P] [US2] [TEST] Port transactions service + schema + tests `lib/server/transactions/transactions.service.ts`, `lib/server/transactions/transactions.schema.ts`, `lib/server/transactions/transactions.service.test.ts` (after T007, T010)
+- [X] T012 [P] [US2] [TEST] Implement transactions route handlers + tests — `GET/POST /api/transactions`, `GET/PATCH/DELETE /api/transactions/:id`; preserve the live-verified `{items, nextCursor}` envelope `app/api/transactions/route.ts`, `app/api/transactions/[id]/route.ts`, `app/api/transactions/transactions.routes.test.ts` (after T003, T004, T005, T006, T011)
 
-**Checkpoint:** transactions are fully served by dime-web, including the optional `templateId` usage-bump side effect, cursor pagination, and category-ownership validation.
+**Checkpoint:** transactions are fully served by dime-web, including the optional `templateId` usage-bump
+side effect, cursor pagination, and category-ownership validation — verified by
+`transactions.service.test.ts`/`transactions.routes.test.ts` plus a manual curl session against a running
+dime-web dev server, including a live `templateId` usage-bump check (see
+`phases/001-merge-backend-into-nextjs/tickets/F2.md`). **Corrected during F2**: the single-transaction
+`POST`/`GET :id`/`PATCH` envelope is `{transaction}` (wrapped), not the bare `Transaction` `tdd.md`
+originally documented — the identical class of correction F1 made for categories.
 
 ## Feature 3: Budgets
 

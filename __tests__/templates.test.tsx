@@ -227,6 +227,33 @@ describe('TemplateForm', () => {
       expect(onOpenChange).toHaveBeenCalledWith(false)
     })
   })
+
+  // ─── 5b. TemplateForm clears note via null, not omission, on edit ─────────
+  it('sends note: null (not omitted) when clearing an existing note on edit', async () => {
+    const templateWithNote: Template = { ...mockTemplate, note: 'usual order' }
+    mockUpdateMutateAsync.mockResolvedValueOnce({
+      template: { ...templateWithNote, note: null },
+    })
+
+    render(
+      <TemplateForm open={true} onOpenChange={vi.fn()} template={templateWithNote} />
+    )
+
+    const noteField = screen.getByPlaceholderText('Optional note')
+    expect(noteField).toHaveValue('usual order')
+    await userEvent.clear(noteField)
+
+    fireEvent.click(screen.getByRole('button', { name: /save/i }))
+
+    await waitFor(() => {
+      expect(mockUpdateMutateAsync).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: templateWithNote.id,
+          data: expect.objectContaining({ note: null }),
+        })
+      )
+    })
+  })
 })
 
 // ─── 6. DeleteTemplateDialog ─────────────────────────────────────────────────

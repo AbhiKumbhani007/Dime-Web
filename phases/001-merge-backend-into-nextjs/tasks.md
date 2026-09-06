@@ -72,9 +72,14 @@ documented — the identical class of correction F1 made for categories and F2 m
 ## Feature 5: Analytics
 
 - [X] T017 [P] [US5] [TEST] Port analytics service + period helper + tests (read-only) `lib/server/analytics/analytics.service.ts`, `lib/server/analytics/analytics.period.ts`, `lib/server/analytics/analytics.service.test.ts`, `lib/server/analytics/analytics.period.test.ts` (after T007, T010)
-- [ ] T018 [P] [US5] [TEST] Implement the 6 analytics route handlers + tests — `overview`, `by-period`, `by-category`, `trends`, `top-days`, `budget-vs-actual`; the last reuses budgets' `listBudgets`, so it needs the budgets service, not just its own `app/api/analytics/overview/route.ts`, `app/api/analytics/by-period/route.ts`, `app/api/analytics/by-category/route.ts`, `app/api/analytics/trends/route.ts`, `app/api/analytics/top-days/route.ts`, `app/api/analytics/budget-vs-actual/route.ts`, `app/api/analytics/analytics.routes.test.ts` (after T003, T004, T005, T006, T013, T017)
+- [X] T018 [P] [US5] [TEST] Implement the 6 analytics route handlers + tests — `overview`, `by-period`, `by-category`, `trends`, `top-days`, `budget-vs-actual`; the last reuses budgets' `listBudgets`, so it needs the budgets service, not just its own `app/api/analytics/overview/route.ts`, `app/api/analytics/by-period/route.ts`, `app/api/analytics/by-category/route.ts`, `app/api/analytics/trends/route.ts`, `app/api/analytics/top-days/route.ts`, `app/api/analytics/budget-vs-actual/route.ts`, `app/api/analytics/analytics.routes.test.ts` (after T003, T004, T005, T006, T013, T017)
 
-**Checkpoint:** every analytics view (insights screen) is fully served by dime-web.
+**Checkpoint:** every analytics view (insights screen) is fully served by dime-web. **Corrected during
+F5**: `tdd.md`'s `by-period` contract row documented query params `bucket,from?,to?` and left the response
+shape vague ("series array") — actual shipped contract is `period,date?,categoryId?` in, and a flat
+`{period,labels,income,expense,net,from,to}` object out, matching `lib/api/analytics.ts`'s already-shipped
+`getByPeriod`/`ByPeriodResult`. Same class of "TDD documented the wrong shape" correction F1 through F4 each
+made once for their own module.
 
 ## Feature 6: Ledger
 

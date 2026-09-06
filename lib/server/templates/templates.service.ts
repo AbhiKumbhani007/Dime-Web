@@ -1,5 +1,5 @@
 import 'server-only'
-import type { PrismaClient, Template, Category } from '@prisma/client'
+import type { Prisma, PrismaClient } from '@prisma/client'
 import type {
   CreateTemplateBody,
   UpdateTemplateBody,
@@ -7,14 +7,19 @@ import type {
 } from './templates.schema'
 import { httpError } from '@/lib/server/httpError'
 
-export type TemplateWithCategory = Template & {
-  category: Pick<Category, 'id' | 'name' | 'emoji' | 'color'> | null
-}
-
 const templateInclude = {
   category: { select: { id: true, name: true, emoji: true, color: true } },
 } as const
 
+export type TemplateWithCategory = Prisma.TemplateGetPayload<{
+  include: typeof templateInclude
+}>
+
+// 'usage'/'recent' sort on usageCount/lastUsedAt, which nothing in this
+// module writes — the bump lives in transactions.service.ts (Feature 2) as a
+// write-time side effect of creating a transaction with a templateId. Until
+// that lands, both sorts degrade to createdAt order; this is expected, not a
+// bug (see tickets/F4.md's Decisions table).
 function orderByFor(sort: SortQuery['sort']) {
   switch (sort) {
     case 'recent':
@@ -30,6 +35,19 @@ function orderByFor(sort: SortQuery['sort']) {
   }
 }
 
+async function assertCategoryOwned(
+  prisma: PrismaClient,
+  userId: string,
+  categoryId: string
+): Promise<void> {
+  const category = await prisma.category.findFirst({
+    where: { id: categoryId, userId },
+  })
+  if (!category) {
+    throw httpError(404, 'Category not found')
+  }
+}
+
 export async function listTemplates(
   prisma: PrismaClient,
   userId: string,
@@ -39,7 +57,7 @@ export async function listTemplates(
     where: { userId },
     orderBy: orderByFor(sort),
     include: templateInclude,
-  }) as Promise<TemplateWithCategory[]>
+  })
 }
 
 export async function createTemplate(
@@ -48,16 +66,11 @@ export async function createTemplate(
   data: CreateTemplateBody
 ): Promise<TemplateWithCategory> {
   if (data.categoryId) {
-    const category = await prisma.category.findFirst({
-      where: { id: data.categoryId, userId },
-    })
-    if (!category) {
-      throw httpError(404, 'Category not found')
-    }
+    await assertCategoryOwned(prisma, userId, data.categoryId)
   }
 
   try {
-    return (await prisma.template.create({
+    return await prisma.template.create({
       data: {
         label: data.label,
         emoji: data.emoji ?? '🧾',
@@ -68,11 +81,17 @@ export async function createTemplate(
         userId,
       },
       include: templateInclude,
-    })) as TemplateWithCategory
+    })
   } catch (err: unknown) {
     const e = err as { code?: string }
     if (e.code === 'P2002') {
       throw { code: 'DUPLICATE_LABEL' }
+    }
+    // The category-ownership check above isn't atomic with this write — a
+    // concurrent delete of that category lands here as a P2003 FK violation
+    // rather than the 404 the check above would normally have caught.
+    if (e.code === 'P2003') {
+      throw httpError(404, 'Category not found')
     }
     throw err
   }
@@ -92,24 +111,24 @@ export async function updateTemplate(
   // categoryId is nullable on this model (clearing is always allowed via an
   // explicit null); only a truthy categoryId needs an ownership check.
   if (data.categoryId) {
-    const category = await prisma.category.findFirst({
-      where: { id: data.categoryId, userId },
-    })
-    if (!category) {
-      throw httpError(404, 'Category not found')
-    }
+    await assertCategoryOwned(prisma, userId, data.categoryId)
   }
 
   try {
-    return (await prisma.template.update({
+    return await prisma.template.update({
       where: { id },
       data,
       include: templateInclude,
-    })) as TemplateWithCategory
+    })
   } catch (err: unknown) {
     const e = err as { code?: string }
     if (e.code === 'P2002') {
       throw { code: 'DUPLICATE_LABEL' }
+    }
+    // See createTemplate's identical comment — the ownership check above
+    // isn't atomic with this write.
+    if (e.code === 'P2003') {
+      throw httpError(404, 'Category not found')
     }
     throw err
   }

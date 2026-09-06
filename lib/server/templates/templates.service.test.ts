@@ -184,6 +184,28 @@ describe('createTemplate', () => {
     ).rejects.toEqual({ code: 'DUPLICATE_LABEL' })
   })
 
+  it('throws a 404 httpError (not a raw 500) when categoryId is deleted between the ownership check and the write', async () => {
+    // The ownership check and the create aren't atomic — a concurrent
+    // category delete lands here as a P2003 FK violation.
+    const prisma = createMockPrisma()
+    prisma.category.findFirst.mockResolvedValue({
+      id: 'cat1',
+      userId: 'user42',
+    })
+    prisma.template.create.mockRejectedValue(
+      Object.assign(new Error('Foreign key constraint failed'), {
+        code: 'P2003',
+      })
+    )
+
+    await expect(
+      createTemplate(prisma, 'user42', {
+        label: 'Coffee',
+        categoryId: 'cat1',
+      } as CreateTemplateBody)
+    ).rejects.toMatchObject({ statusCode: 404, message: 'Category not found' })
+  })
+
   it('rethrows non-P2002 errors unchanged', async () => {
     const prisma = createMockPrisma()
     const dbError = new Error('connection lost')
@@ -273,6 +295,27 @@ describe('updateTemplate', () => {
     await expect(
       updateTemplate(prisma, 'user42', 'tpl1', { label: 'Latte' })
     ).rejects.toEqual({ code: 'DUPLICATE_LABEL' })
+  })
+
+  it('throws a 404 httpError (not a raw 500) when categoryId is deleted between the ownership check and the write', async () => {
+    const prisma = createMockPrisma()
+    prisma.template.findFirst.mockResolvedValue({
+      id: 'tpl1',
+      userId: 'user42',
+    })
+    prisma.category.findFirst.mockResolvedValue({
+      id: 'cat1',
+      userId: 'user42',
+    })
+    prisma.template.update.mockRejectedValue(
+      Object.assign(new Error('Foreign key constraint failed'), {
+        code: 'P2003',
+      })
+    )
+
+    await expect(
+      updateTemplate(prisma, 'user42', 'tpl1', { categoryId: 'cat1' })
+    ).rejects.toMatchObject({ statusCode: 404, message: 'Category not found' })
   })
 })
 

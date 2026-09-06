@@ -179,8 +179,13 @@ export async function getByCategory(
 
   if (grouped.length === 0) return []
 
+  // Scoped by userId too, not just the groupBy above — matches the
+  // defense-in-depth convention every other direct Category query in this
+  // codebase follows (categories.service.ts, budgets.service.ts's
+  // assertCategoryOwned), rather than relying solely on transactions.service.ts's
+  // write-time invariant that a categoryId always belongs to its transaction's user.
   const categories = await prisma.category.findMany({
-    where: { id: { in: grouped.map((g) => g.categoryId) } },
+    where: { id: { in: grouped.map((g) => g.categoryId) }, userId },
     select: { id: true, name: true, emoji: true, color: true },
   })
   const categoryById = new Map(categories.map((c) => [c.id, c]))

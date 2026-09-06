@@ -194,6 +194,22 @@ describe('getByCategory', () => {
     expect(row.category).toBeNull()
   })
 
+  it('scopes the category lookup by userId, not just by id', async () => {
+    const prisma = createMockPrisma()
+    prisma.transaction.groupBy.mockResolvedValue([
+      { categoryId: 'cat1', _sum: { amount: 100 }, _count: 1 },
+    ])
+    prisma.category.findMany.mockResolvedValue([])
+
+    await getByCategory(prisma, USER, {})
+
+    expect(prisma.category.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ userId: USER }),
+      })
+    )
+  })
+
   it('returns [] without querying categories when there is no spend', async () => {
     const prisma = createMockPrisma()
     prisma.transaction.groupBy.mockResolvedValue([])

@@ -80,6 +80,21 @@ Uint8Array. Received an instance of Uint8Array"` when run in Vitest's default `j
   above, this doesn't throw or fail a naive port's tests unless the test asserts the actual message
   text, not just pass/fail — write that assertion for any v3→v4 enum port.
 
+- **`dime-api` is not reachable from this repo's sessions** — repository scope for this project is
+  `dime-web` only, and no sibling `dime-api` checkout exists here (confirmed via `list_repos` during F5).
+  For any contract `tdd.md` leaves vague, the substitute "live system" is `dime-web`'s own already-shipped
+  frontend client/hooks/tests, which already depend on the real shape in production code — same source
+  F1 through F4 leaned on for their own "documented bare, actually wrapped" corrections.
+- **Prisma's `groupBy` resolves `_count: true` to a plain `number` per group** — confirmed against the
+  generated `.prisma/client` types (`TransactionGroupByOutputType`'s conditional type: `P extends '_count'
+  ? T[P] extends boolean ? number : ...`). This differs from `aggregate()`, where `_count: true` also
+  yields a number, but a *field-scoped* form (`_count: {someField: true}`) yields an object either way —
+  worth re-checking the generated types rather than assuming, same spirit as this file's other Zod/Prisma
+  version-surface entries.
+- **`tdd.md`'s project structure tree for `analytics/` omitted `analytics.schema.ts`** — every other
+  ported module lists its own `*.schema.ts` there; analytics needs one too (six endpoints' query params).
+  Added during F5.
+
 ## Tooling
 
 - **No devx-starter scaffold tooling exists in this repo** — only `.claude/skills/` was installed

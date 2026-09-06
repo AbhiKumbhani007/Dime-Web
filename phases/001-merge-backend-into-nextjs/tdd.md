@@ -79,6 +79,9 @@ dime-web/
     analytics/
       analytics.service.ts                        new — copied verbatim
       analytics.period.ts                         new — copied verbatim (pure logic)
+      analytics.schema.ts                         new — Zod v4 query schemas for the six endpoints (missing from this
+                                                    tree originally — every other module lists its own *.schema.ts here;
+                                                    added during F5, see tickets/F5.md)
     ledger/
       ledger.service.ts                           new — copied verbatim
       ledger.balance.ts                            new — copied verbatim (pure logic)
@@ -249,11 +252,11 @@ All endpoints below except `health`, `auth/register`, `auth/login`, `auth/refres
 | budgets | PATCH | `/api/budgets/:id` | partial | `200 {budget: Budget}` (**corrected during F3**, same reason as POST above) | `400`, `404` | `budgets.service.ts` |
 | budgets | DELETE | `/api/budgets/:id` | — | `204` | `404` | `budgets.service.ts` |
 | analytics | GET | `/api/analytics/overview` | query: `from?,to?` | `200` flat object `{totalIncome,totalExpense,netBalance,transactionCount,avgDailySpend,from,to}` (**live-verified**, no wrapper key) | — | `dime-api/src/modules/analytics/analytics.routes.ts`; live fixture confirms exact field set |
-| analytics | GET | `/api/analytics/by-period` | query: `bucket(weekly\|monthly\|yearly),from?,to?` | `200` series array — shape per `analytics.service.ts` | — | same |
-| analytics | GET | `/api/analytics/by-category` | query: `from?,to?` | `200` breakdown array with percentages | — | same |
-| analytics | GET | `/api/analytics/trends` | query: `months?(default 6,max 36)` | `200` array of `{month,income,expense,net}` | — | same |
-| analytics | GET | `/api/analytics/top-days` | query: `from?,to?,limit?` | `200` array of top-spend days | — | same |
-| analytics | GET | `/api/analytics/budget-vs-actual` | — | `200 {budgets: BudgetWithProgress[]}` — reuses `listBudgets` per `analytics.routes.ts` | — | same |
+| analytics | GET | `/api/analytics/by-period` | query: `period(weekly\|monthly\|yearly),date?,categoryId?` (**corrected during F5** — was documented as `bucket(weekly\|monthly\|yearly),from?,to?`; the actual param is named `period`, takes a single reference `date` rather than a `from`/`to` range, and additionally accepts a `categoryId` filter, matching `dime-web`'s already-shipped `lib/api/analytics.ts`'s `getByPeriod`/`hooks/useAnalytics.ts`) | `200` flat object `{period,labels,income,expense,net,from,to}` — parallel arrays, not an array of per-bucket rows (**corrected during F5** — was left as "series array — shape per `analytics.service.ts`"; the flat shape matches the already-shipped `ByPeriodResult` type and `__tests__/insights.test.tsx`'s `BY_PERIOD` fixture) | — | `dime-web`'s own `lib/api/analytics.ts` + `hooks/useAnalytics.ts` (already-shipped, since `dime-api`'s own source is unreachable from this repo — see `tickets/F5.md`) |
+| analytics | GET | `/api/analytics/by-category` | query: `from?,to?,isIncome?` (**corrected during F5** — `isIncome?` was missing from this row; `hooks/useAnalytics.ts`'s `useAnalyticsByCategory` already sends it) | `200 {categories: CategoryBreakdownRow[]}` — each `{category: {id,name,emoji,color}\|null, total, percent, count}` | — | same |
+| analytics | GET | `/api/analytics/trends` | query: `months?(default 6,max 36)` | `200 {trends: TrendRow[]}` — each `{month,income,expense,net}` | — | same |
+| analytics | GET | `/api/analytics/top-days` | query: `from?,to?,limit?(default 10)` | `200 {days: TopDayRow[]}` — each `{date,total}`, expense-only, sorted descending | — | same |
+| analytics | GET | `/api/analytics/budget-vs-actual` | — | `200 {budgets: BudgetVsActualRow[]}` — reuses `listBudgets` for the computation but maps each row to the narrower `{budget: {id,name,emoji,type}, allocated, spent, remaining, percent}`, not the full `BudgetWithProgress` this row previously said (**corrected during F5**) | — | same |
 | ledger | GET | `/api/ledger/people` | — | `200 {people: LedgerPersonWithBalance[], summary: {...}}` (**live-verified envelope**, empty-state fixture captured) | — | `dime-api/src/modules/ledger/ledger.routes.ts` |
 | ledger | POST | `/api/ledger/people` | `{name,phone?,note?,color?}` | `201 LedgerPerson` | `400`, `409` (duplicate name, case-insensitive, app-level check) | `ledger.service.ts` |
 | ledger | GET | `/api/ledger/people/:id` | — | `200 LedgerPersonWithBalance` | `404` | `ledger.service.ts` |

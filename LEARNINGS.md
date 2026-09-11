@@ -106,6 +106,15 @@ Uint8Array. Received an instance of Uint8Array"` when run in Vitest's default `j
   instead. Same class as the already-documented `errorMap`/`.min(1, msg)` v3→v4 message quirks; write the
   test to assert `success === false` only, not the literal message, for any ported `.finite()`/`Infinity`-
   adjacent check. Found during F6.
+- **`dime-api`'s global `@fastify/rate-limit` registration has no per-route exemption for `auth.routes.ts`**
+  (confirmed against the live `dime-api/src/server.ts` — contrast `csv.routes.ts`'s explicit per-route
+  override on export) — all 7 ported auth routes go through the same `checkGlobalRateLimit` every other
+  module uses. Worth checking per-route rate-limit overrides in the live source for any not-yet-ported
+  module before assuming the global default applies uniformly.
+- **Zod v4's top-level `z.email(...)` replaces the deprecated `z.string().email()`**, same deprecation
+  pattern already noted here for `z.cuid()` vs `z.string().cuid()`. Used in `auth.schema.ts` (F7) for
+  consistency with every other ported schema's cuid usage; `common.schema.ts` still uses the deprecated
+  chained form and wasn't touched (out of scope for the feature that found this).
 
 ## Tooling
 

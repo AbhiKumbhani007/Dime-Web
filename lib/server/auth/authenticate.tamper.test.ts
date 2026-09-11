@@ -23,6 +23,19 @@ function b64url(input: Buffer | string): string {
     .replace(/=+$/, '')
 }
 
+function flipSignatureByte(base64urlSig: string): string {
+  // Flipping a *character* near the end of a base64url signature is
+  // unreliable: HS256's 32-byte signature base64-encodes to 43 chars, and
+  // the last character only carries 4 significant bits (the rest is
+  // padding) — some character substitutions there decode to the exact same
+  // bytes, silently producing a "tampered" string that isn't actually
+  // tampered. Decode to real bytes and flip a bit well away from that
+  // boundary instead, so this always changes the verified value.
+  const bytes = Buffer.from(base64urlSig, 'base64url')
+  bytes[0] = bytes[0] ^ 0xff
+  return b64url(bytes)
+}
+
 function requestWithAuth(header?: string) {
   return new Request('http://localhost/api/anything', {
     headers: header ? { authorization: header } : {},
@@ -107,8 +120,7 @@ describe('authenticate — adversarial token tampering', () => {
   it('rejects a validly-signed token whose signature has a single byte flipped', async () => {
     const token = await signValidToken()
     const [h, p, s] = token.split('.')
-    const tamperedSig = s.slice(0, -1) + (s.at(-1) === 'A' ? 'B' : 'A')
-    const tampered = `${h}.${p}.${tamperedSig}`
+    const tampered = `${h}.${p}.${flipSignatureByte(s)}`
 
     await expect(
       authenticate(requestWithAuth(`Bearer ${tampered}`))

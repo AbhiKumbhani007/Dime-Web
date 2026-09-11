@@ -81,9 +81,24 @@ export async function registerUser(
 
   const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS)
 
-  const user = await prisma.user.create({
-    data: { email, passwordHash, name },
-  })
+  let user: User
+  try {
+    user = await prisma.user.create({
+      data: { email, passwordHash, name },
+    })
+  } catch (err: unknown) {
+    // Two concurrent registrations for the same email can both pass the
+    // findUnique check above before either commits (TOCTOU race) — the
+    // `email @unique` constraint still stops a duplicate row, but without
+    // this catch the loser's P2002 propagates as an uncaught error and
+    // surfaces as a 500 instead of the documented 409 (found via adversarial
+    // concurrent-request test).
+    const e = err as { code?: string }
+    if (e.code === 'P2002') {
+      throw httpError(409, 'Email already registered')
+    }
+    throw err
+  }
 
   await seedDefaultCategories(prisma, user.id)
 
@@ -126,8 +141,21 @@ export async function refreshTokens(
     throw httpError(401, 'Invalid or expired refresh token')
   }
 
-  // Rotate: delete old token
-  await prisma.refreshToken.delete({ where: { token } })
+  // Rotate: delete old token. Two concurrent refreshes with the same token
+  // can both pass the findUnique check above before either commits (TOCTOU
+  // race) — one delete wins, the other's row is already gone and Prisma
+  // throws P2025 instead of silently no-oping. Without this catch that
+  // propagates as an uncaught error and surfaces as a 500 instead of the
+  // documented 401 (found via adversarial concurrent-request test).
+  try {
+    await prisma.refreshToken.delete({ where: { token } })
+  } catch (err: unknown) {
+    const e = err as { code?: string }
+    if (e.code === 'P2025') {
+      throw httpError(401, 'Invalid or expired refresh token')
+    }
+    throw err
+  }
 
   // Issue new pair
   return issueTokens(prisma, existing.user)

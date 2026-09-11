@@ -226,6 +226,50 @@ describe('computeBalances', () => {
     expect(person.settledEntryCount).toBe(3)
   })
 
+  it('accumulates GAVE and RECEIVED active rows for the same person into one net balance', async () => {
+    const prisma = makeMockPrisma()
+    const now = new Date('2026-01-01T00:00:00.000Z')
+
+    prisma.ledgerPerson.findMany.mockResolvedValue([
+      {
+        id: 'p1',
+        name: 'Alex',
+        phone: null,
+        note: null,
+        color: '#6366f1',
+        userId: 'user1',
+        createdAt: now,
+        updatedAt: now,
+      },
+    ])
+    // Both an active GAVE row and an active RECEIVED row for the same person —
+    // the accumulator must add to `gave` for one and to `received` for the
+    // other, not just exercise the GAVE branch (which every other fixture in
+    // this file happens to use).
+    prisma.ledgerEntry.groupBy
+      .mockResolvedValueOnce([
+        {
+          personId: 'p1',
+          type: 'GAVE',
+          _sum: { amount: 500 },
+          _count: { _all: 1 },
+        },
+        {
+          personId: 'p1',
+          type: 'RECEIVED',
+          _sum: { amount: 200 },
+          _count: { _all: 1 },
+        },
+      ])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ personId: 'p1', _max: { date: now } }])
+
+    const [person] = await computeBalances(prisma as never, 'user1')
+
+    expect(person.balance).toBe(300) // 500 gave - 200 received
+    expect(person.activeEntryCount).toBe(2)
+  })
+
   it('scopes to the given personIds when provided, without dropping the userId scope', async () => {
     const prisma = makeMockPrisma()
     prisma.ledgerPerson.findMany.mockResolvedValue([])

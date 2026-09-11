@@ -8,6 +8,7 @@ export type ImportErrorCode =
   | 'MISSING_FIELD'
   | 'NOTE_TOO_LONG'
   | 'AMOUNT_OUT_OF_RANGE'
+  | 'INVALID_NOTE'
 
 export interface ImportErrorRow {
   row: number
@@ -198,6 +199,22 @@ export function classifyRow(
   }
 
   const note = noteRaw.trim()
+  // A literal NUL byte survives csv-parse (and JS string handling generally)
+  // completely unremarked, but Postgres's `text` columns reject it outright
+  // ("invalid byte sequence for encoding UTF8: 0x00") — verified live against
+  // this repo's own dev database. Left unchecked, one row with a stray null
+  // byte would pass classification as "ready" and then blow up the *entire*
+  // enclosing $transaction at commit time with an opaque 500, taking down an
+  // otherwise-valid batch of up to 500 rows instead of being rejected as a
+  // per-row error the same way every other malformed value is.
+  if (note.includes(String.fromCharCode(0))) {
+    return {
+      ok: false,
+      code: 'INVALID_NOTE',
+      field: 'note',
+      reason: 'Note must not contain a null byte',
+    }
+  }
   if (note.length > MAX_NOTE_LENGTH) {
     return {
       ok: false,

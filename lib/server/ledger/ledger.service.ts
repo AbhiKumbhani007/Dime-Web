@@ -1,4 +1,5 @@
 import 'server-only'
+import { Prisma } from '@prisma/client'
 import type { PrismaClient, LedgerEntry } from '@prisma/client'
 import type {
   CreatePersonBody,
@@ -74,26 +75,67 @@ export async function listPeople(
   return { people, summary: summarise(people) }
 }
 
+// Application-level, case-insensitive duplicate-name check — not a DB unique
+// constraint, since two real people can legitimately share a name and Prisma
+// has no native case-insensitive unique index. A bare check-then-insert here
+// is a classic TOCTOU race: two concurrent creates for the same name both
+// pass the check before either write lands, producing two rows (confirmed
+// via genuine concurrent load in ledger.concurrency.routes.test.ts — up to
+// 20/20 concurrent identical-name creates all succeeded pre-fix, 4 rows
+// created for one name). Run the check-then-write at Postgres SERIALIZABLE
+// isolation instead: Postgres's SSI detects the resulting read/write
+// dependency cycle between two concurrent transactions that each read "no
+// match" and then insert a matching row, and aborts one with a `40001`
+// serialization failure (Prisma error code P2034) — the documented Postgres
+// pattern for enforcing an app-level uniqueness rule without a DB
+// constraint. The loser is retried, at which point its SELECT sees the
+// winner's now-committed row and correctly falls through to the 409.
+// (found via adversarial test)
+const SERIALIZATION_CONFLICT_CODE = 'P2034'
+const MAX_SERIALIZATION_RETRIES = 5
+
+async function withSerializableRetry<T>(
+  prisma: PrismaClient,
+  fn: (tx: Prisma.TransactionClient) => Promise<T>
+): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await prisma.$transaction(fn, {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      })
+    } catch (err: unknown) {
+      const e = err as { code?: string }
+      if (
+        e.code === SERIALIZATION_CONFLICT_CODE &&
+        attempt < MAX_SERIALIZATION_RETRIES
+      ) {
+        continue
+      }
+      throw err
+    }
+  }
+}
+
 export async function createPerson(
   prisma: PrismaClient,
   userId: string,
   data: CreatePersonBody
 ): Promise<LedgerPersonDTO> {
-  // Application-level, case-insensitive — not a DB unique constraint, since two
-  // real people can legitimately share a name.
-  const existing = await prisma.ledgerPerson.findFirst({
-    where: { userId, name: { equals: data.name, mode: 'insensitive' } },
-  })
-  if (existing) throw httpError(409, 'A person with this name already exists')
+  const created = await withSerializableRetry(prisma, async (tx) => {
+    const existing = await tx.ledgerPerson.findFirst({
+      where: { userId, name: { equals: data.name, mode: 'insensitive' } },
+    })
+    if (existing) throw httpError(409, 'A person with this name already exists')
 
-  const created = await prisma.ledgerPerson.create({
-    data: {
-      name: data.name,
-      phone: data.phone,
-      note: data.note,
-      color: data.color ?? '#6366f1',
-      userId,
-    },
+    return tx.ledgerPerson.create({
+      data: {
+        name: data.name,
+        phone: data.phone,
+        note: data.note,
+        color: data.color ?? '#6366f1',
+        userId,
+      },
+    })
   })
 
   return findPersonDTO(prisma, userId, created.id)
@@ -116,17 +158,23 @@ export async function updatePerson(
   await assertPersonOwned(prisma, userId, id)
 
   if (data.name) {
-    const existing = await prisma.ledgerPerson.findFirst({
-      where: {
-        userId,
-        name: { equals: data.name, mode: 'insensitive' },
-        id: { not: id },
-      },
-    })
-    if (existing) throw httpError(409, 'A person with this name already exists')
-  }
+    const name = data.name
+    await withSerializableRetry(prisma, async (tx) => {
+      const existing = await tx.ledgerPerson.findFirst({
+        where: {
+          userId,
+          name: { equals: name, mode: 'insensitive' },
+          id: { not: id },
+        },
+      })
+      if (existing)
+        throw httpError(409, 'A person with this name already exists')
 
-  await prisma.ledgerPerson.update({ where: { id }, data })
+      await tx.ledgerPerson.update({ where: { id }, data })
+    })
+  } else {
+    await prisma.ledgerPerson.update({ where: { id }, data })
+  }
 
   return findPersonDTO(prisma, userId, id)
 }

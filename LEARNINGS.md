@@ -80,20 +80,32 @@ Uint8Array. Received an instance of Uint8Array"` when run in Vitest's default `j
   above, this doesn't throw or fail a naive port's tests unless the test asserts the actual message
   text, not just pass/fail — write that assertion for any v3→v4 enum port.
 
-- **`dime-api` is not reachable from this repo's sessions** — repository scope for this project is
-  `dime-web` only, and no sibling `dime-api` checkout exists here (confirmed via `list_repos` during F5).
-  For any contract `tdd.md` leaves vague, the substitute "live system" is `dime-web`'s own already-shipped
-  frontend client/hooks/tests, which already depend on the real shape in production code — same source
-  F1 through F4 leaned on for their own "documented bare, actually wrapped" corrections.
+- **`dime-api` reachability depends on the execution environment, not on the repo** — F5's session had no
+  sibling `dime-api` checkout (confirmed via `list_repos`) and fell back to `dime-web`'s own already-shipped
+  frontend client/hooks/tests as the substitute "live system" for any contract `tdd.md` left vague. F6's
+  session, on a different host, had a running `dime-api` checkout at `../dime-api` with its dev server live
+  on `:4000` — read directly as the primary port source. Don't assume either way from a prior ticket's
+  session; check `list_repos`/the filesystem at the start of each ticket instead. Either substitute is
+  valid; dime-web's shipped frontend client remains a useful cross-check even when dime-api is reachable
+  (both agreed exactly, for every ledger envelope, during F6).
 - **Prisma's `groupBy` resolves `_count: true` to a plain `number` per group** — confirmed against the
   generated `.prisma/client` types (`TransactionGroupByOutputType`'s conditional type: `P extends '_count'
-  ? T[P] extends boolean ? number : ...`). This differs from `aggregate()`, where `_count: true` also
-  yields a number, but a *field-scoped* form (`_count: {someField: true}`) yields an object either way —
+? T[P] extends boolean ? number : ...`). This differs from `aggregate()`, where `_count: true` also
+  yields a number, but a _field-scoped_ form (`_count: {someField: true}`) yields an object either way —
   worth re-checking the generated types rather than assuming, same spirit as this file's other Zod/Prisma
   version-surface entries.
 - **`tdd.md`'s project structure tree for `analytics/` omitted `analytics.schema.ts`** — every other
   ported module lists its own `*.schema.ts` there; analytics needs one too (six endpoints' query params).
   Added during F5.
+- **Zod v4's `z.number()` already rejects `Infinity`/`NaN` at the base type check**, before any
+  `.finite(message)`/`.refine(...)` chained after it ever runs — confirmed live via `node -e` against the
+  installed `zod@4.3.6`. A v3-authored custom message on `.finite(...)` (e.g. ledger's
+  `SettleBodySchema`'s `expectedBalance: z.number().finite('expectedBalance must be a finite number')`,
+  ported near-verbatim from `dime-api`) never actually surfaces — the rejection still happens (400s
+  correctly), but with v4's generic `"Invalid input: expected number, received Infinity"`-shaped message
+  instead. Same class as the already-documented `errorMap`/`.min(1, msg)` v3→v4 message quirks; write the
+  test to assert `success === false` only, not the literal message, for any ported `.finite()`/`Infinity`-
+  adjacent check. Found during F6.
 
 ## Tooling
 

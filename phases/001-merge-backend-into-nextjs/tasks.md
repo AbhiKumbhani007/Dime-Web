@@ -113,10 +113,10 @@ streaming), so it benefits most from every other module's route pattern already 
 
 ## Feature 9: Polish — frontend cutover & validation
 
-- [ ] T025 [TEST] Update the one frontend file that depends on the old flat error shape now that `/api/auth/me/password` returns the standardized `{error:{code,message}}` shape `components/settings/AccountForm.tsx`, `__tests__/settings-account.test.tsx` (after T022)
-- [ ] T026 Point dime-web's own client at itself — same-origin base URL, no more `NEXT_PUBLIC_API_URL` pointing at :4000 `lib/api.ts`, `components/providers/SessionProvider.tsx` (after T010, T012, T014, T016, T018, T020, T022, T024)
-- [ ] T027 Retarget e2e helpers to same-origin and drop the `dime-api` `webServer` entry `e2e/helpers/api.ts`, `playwright.config.ts` (after T026)
-- [ ] T028 [TEST] Final validation — run every existing Vitest suite and the full Playwright suite against dime-web alone; confirm every item in the TDD's "Done for this phase" list is demonstrated and no stub/`501` remains `phases/001-merge-backend-into-nextjs/tdd.md#testing-and-done` (after T025, T026, T027)
+- [X] T025 [TEST] Update the one frontend file that depends on the old flat error shape now that `/api/auth/me/password` returns the standardized `{error:{code,message}}` shape `components/settings/AccountForm.tsx`, `__tests__/settings-account.test.tsx` (after T022)
+- [X] T026 Point dime-web's own client at itself — same-origin base URL, no more `NEXT_PUBLIC_API_URL` pointing at :4000 `lib/api.ts`, `components/providers/SessionProvider.tsx` (after T010, T012, T014, T016, T018, T020, T022, T024)
+- [X] T027 Retarget e2e helpers to same-origin and drop the `dime-api` `webServer` entry `e2e/helpers/api.ts`, `playwright.config.ts` (after T026)
+- [X] T028 [TEST] Final validation — run every existing Vitest suite and the full Playwright suite against dime-web alone; confirm every item in the TDD's "Done for this phase" list is demonstrated and no stub/`501` remains `phases/001-merge-backend-into-nextjs/tdd.md#testing-and-done` (after T025, T026, T027)
 
 **Checkpoint:** dime-web is a single deployable. dime-api is no longer in dime-web's request path (still running, per the user's choice, as a fallback — see `docs/decisions/001-merge-backend-into-nextjs.md` for its own, separately-decided fate).
 

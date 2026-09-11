@@ -106,8 +106,8 @@ it, since dime-web and dime-api share the same `JWT_ACCESS_SECRET`.
 Last, per the TDD's Architecture table: the most Fastify-specific plumbing to rebuild (multipart,
 streaming), so it benefits most from every other module's route pattern already being proven.
 
-- [ ] T023 [P] [US8] [TEST] Port csv service + row-parsing + token helpers + schema + tests `lib/server/csv/csv.service.ts`, `lib/server/csv/csv.parse.ts`, `lib/server/csv/csv.token.ts`, `lib/server/csv/csv.schema.ts`, `lib/server/csv/csv.service.test.ts`, `lib/server/csv/csv.parse.test.ts`, `lib/server/csv/csv.token.test.ts` (after T007, T010)
-- [ ] T024 [US8] [TEST] Implement csv route handlers + tests — export (buffer `exportRows()` in memory via `for await`, preserve the exact live-verified headers/UTF-8 BOM/`Content-Disposition` byte-for-byte), import/preview and import/commit (Web `Request.formData()`/`File`, size-checked before reading bytes) `app/api/csv/export/route.ts`, `app/api/csv/import/preview/route.ts`, `app/api/csv/import/commit/route.ts`, `app/api/csv/csv.routes.test.ts` (after T003, T004, T005, T006, T023)
+- [X] T023 [P] [US8] [TEST] Port csv service + row-parsing + token helpers + schema + tests `lib/server/csv/csv.service.ts`, `lib/server/csv/csv.parse.ts`, `lib/server/csv/csv.token.ts`, `lib/server/csv/csv.schema.ts`, `lib/server/csv/csv.service.test.ts`, `lib/server/csv/csv.parse.test.ts`, `lib/server/csv/csv.token.test.ts` (after T007, T010)
+- [X] T024 [US8] [TEST] Implement csv route handlers + tests — export (buffer `exportRows()` in memory via `for await`, preserve the exact live-verified headers/UTF-8 BOM/`Content-Disposition` byte-for-byte), import/preview and import/commit (Web `Request.formData()`/`File`, size-checked before reading bytes) `app/api/csv/export/route.ts`, `app/api/csv/import/preview/route.ts`, `app/api/csv/import/commit/route.ts`, `app/api/csv/csv.routes.test.ts` (after T003, T004, T005, T006, T023)
 
 **Checkpoint:** every one of dime-api's ~40 endpoints is now served by dime-web. dime-api is still running and still the frontend's configured backend — nothing user-facing has changed yet.
 

@@ -115,6 +115,13 @@ Uint8Array. Received an instance of Uint8Array"` when run in Vitest's default `j
   pattern already noted here for `z.cuid()` vs `z.string().cuid()`. Used in `auth.schema.ts` (F7) for
   consistency with every other ported schema's cuid usage; `common.schema.ts` still uses the deprecated
   chained form and wasn't touched (out of scope for the feature that found this).
+- **`Response.text()`'s `TextDecoder` strips a leading UTF-8 BOM (`U+FEFF`) by default** — a route test
+  that asserts the CSV export's leading-BOM byte via `(await response.text()).charCodeAt(0)` will always
+  see the first *content* character instead and fail, even though the actual wire bytes `new Response(body,
+  ...)` sends are correct (`TextEncoder`, used on the write side, does not strip anything — only decoding
+  does). Read `await response.arrayBuffer()` and check the raw bytes (`0xef, 0xbb, 0xbf`) instead. Found
+  while writing `app/api/csv/csv.routes.test.ts` during F8 — the same gotcha would silently hide a real BOM
+  regression in any future route that emits one.
 
 ## Tooling
 

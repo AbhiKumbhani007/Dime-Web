@@ -219,3 +219,32 @@ concurrent settle attempt can never partially apply.
 **Every direct lookup is scoped by `userId`, not just `id`** (`ledgerPerson`/`ledgerEntry` `findFirst`, and
 `computeBalances`'s underlying queries) — matches the defense-in-depth convention `2e58f9c` established for
 this codebase, rather than relying on a write-time invariant.
+
+## CSV
+
+All three endpoints require a bearer token. `GET /api/csv/export` is subject to a **tighter** rate limit
+than every other route (`RATE_LIMIT_CSV_EXPORT_MAX`, default 10/min — replaces the global limit for this
+route, not in addition to it); `import/preview` and `import/commit` use the same global rate limit as
+every other mutating route.
+
+| Method | Path                      | Request                                                    | Success                                                                                                                           | Errors                                                                          |
+| ------ | ------------------------- | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| GET    | `/api/csv/export`         | query: `from?, to?`                                          | `200`, `Content-Type: text/csv; charset=utf-8`, `Content-Disposition: attachment; filename="paisa-export-<yyyy-MM-dd>.csv"`, `Cache-Control: no-store`; body is a UTF-8 BOM then `Date,Amount,Type,Category,Note\r\n` then one CSV line per transaction — **no JSON envelope**, the only route in the API without one | `400` (bad `from`/`to`), `401`, `429`                                             |
+| POST   | `/api/csv/import/preview` | multipart `file` (`.csv`, ≤2MB, size checked before any bytes are read) | `200 {previewToken, fileName, totalRows, readyCount, duplicateCount, errorCount, errors: ImportErrorRow[], errorsTruncated, duplicates, expiresAt}` — `previewToken` is a signed, 30-minute-TTL HMAC token, not a bearer/JWT token | `400` (no file, wrong extension, oversized, unparseable CSV, missing required column, >5000 rows), `401`, `429` |
+| POST   | `/api/csv/import/commit`  | multipart `file` (same file previewed) + `previewToken`      | `201 {imported, skippedDuplicates, skippedErrors, totalRows, driftedFromPreview}` — bulk-inserts the ready rows in chunks of 500 inside one Prisma `$transaction` | `400` (no file, wrong extension, missing/malformed/expired/wrong-user `previewToken`), `401`, `409` (uploaded file's hash doesn't match the previewed file), `429` |
+
+**`phases/001-merge-backend-into-nextjs/tdd.md`'s contracts table under-specified `import/preview`'s
+response (glossed as `{previewToken, rows: [...]}`, which doesn't exist) and got `import/commit`'s status
+codes wrong (documented as `200` success / `400` for a file-hash mismatch; the actual, `dime-api`-source-
+and-test-confirmed values are `201` success / `409` for a hash mismatch)** — corrected during F8, same
+class of "TDD documented the wrong shape" correction F1 through F5 each made once for their own module;
+see `phases/001-merge-backend-into-nextjs/tickets/F8.md`'s Decisions table.
+
+**Import is a two-step, stateless flow.** `commit` never trusts `preview`'s classification — it re-parses
+and re-classifies the uploaded file from scratch (in case a transaction was added in between) and reports
+`driftedFromPreview: true` when the recomputed ready/duplicate/error counts disagree with what the token
+recorded. It also re-hashes the uploaded file and rejects (`409`) if it doesn't match the file that was
+previewed, so a client can't preview one file and commit a different one under the same token.
+
+**A row is never auto-created or fuzzy-matched against an existing category** — an unrecognized `Category`
+value is always an `UNKNOWN_CATEGORY` error row, never a guess.

@@ -1,6 +1,9 @@
 import { request as pwRequest, type APIRequestContext } from '@playwright/test'
 
-export const API_URL = 'http://localhost:4000'
+// dime-web now serves auth (and every other) route itself — same origin as
+// the app under test, matching playwright.config.ts's `use.baseURL` and its
+// one remaining `webServer` entry.
+export const API_URL = 'http://localhost:3000'
 
 export interface TestUser {
   email: string

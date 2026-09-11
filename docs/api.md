@@ -14,6 +14,35 @@ Every response uses the standardized error envelope for errors: `{ error: { code
 | ------ | --------------------------------------------------------------------------- | ---- | ------------ | --------------------------------- | ------ |
 | GET    | `/api/health` (also reachable at `/health`, via a `next.config.ts` rewrite) | none | no           | `200 { status: "ok", timestamp }` | —      |
 
+## Auth
+
+`register`/`login`/`refresh`/`google` need no bearer token (they issue one). Every other endpoint below
+requires `Authorization: Bearer <token>` (verified via `lib/server/auth/authenticate.ts`). All 7 endpoints
+are subject to the global rate limit, same as every other module — `dime-api`'s own source registers its
+rate limiter once, globally, with no per-route exemption for auth. Access tokens are signed with `jose`
+(HS256, 15-minute TTL, `{userId,email}` payload) using the same `JWT_ACCESS_SECRET` value `dime-api` uses,
+so a token issued by either system verifies against both during the transition. Refresh tokens are opaque
+`crypto.randomUUID()` values stored in `RefreshToken` with a 30-day expiry, rotated (old token deleted) on
+every `/api/auth/refresh` call.
+
+| Method | Path                    | Auth | Request body                     | Success                                          | Errors                                                                 |
+| ------ | ----------------------- | ---- | --------------------------------- | ------------------------------------------------- | ----------------------------------------------------------------------- |
+| POST   | `/api/auth/register`    | none | `{ email, password, name? }`      | `201 { accessToken, refreshToken, user }` (flat)  | `400` (validation), `409` (email already registered), `429`             |
+| POST   | `/api/auth/login`       | none | `{ email, password }`             | `200 { accessToken, refreshToken, user }` (flat)  | `400` (validation), `401` (invalid email/password), `429`               |
+| POST   | `/api/auth/refresh`     | none | `{ refreshToken }`                | `200 { accessToken, refreshToken }` (rotated)     | `400` (validation), `401` (invalid/expired/already-used token), `429`   |
+| POST   | `/api/auth/logout`      | none | `{ refreshToken }`                | `204` (idempotent — no-ops if token not found)    | `400` (validation), `429`                                               |
+| GET    | `/api/auth/me`          | yes  | —                                  | `200 UserProfile` (flat)                          | `401`, `404` (token valid but the user row no longer exists), `429`     |
+| PATCH  | `/api/auth/me`          | yes  | `{ name?, theme? }`               | `200 UserProfile` (flat)                          | `401`, `429`                                                             |
+| PATCH  | `/api/auth/me/password` | yes  | `{ oldPassword, newPassword }`    | `200 {}` (empty object)                           | `400` (wrong old password, or `newPassword` under 8 chars), `401`, `429` |
+| DELETE | `/api/auth/me`          | yes  | —                                  | `204`                                              | `401`, `429`                                                             |
+| POST   | `/api/auth/google`      | none | `{ idToken }`                     | `200 { accessToken, refreshToken, user }` (flat)  | `400` (validation), `401` (invalid Google token / missing `email` claim), `429` |
+
+**Note on envelopes:** unlike every other module in this doc, `register`/`login`/`refresh`/`google`'s
+success bodies are **flat** (`{accessToken,refreshToken,user}`, no wrapper), matching the live-verified
+`dime-api` shape. `me` GET/PATCH return a flat `UserProfile`, not `{user: UserProfile}`.
+
+`UserProfile`: `{ id, email, name: string | null, theme, createdAt }`.
+
 ## Categories
 
 All four endpoints require a bearer token (`Authorization: Bearer <token>`, verified via

@@ -94,6 +94,21 @@ Uint8Array. Received an instance of Uint8Array"` when run in Vitest's default `j
 - **`tdd.md`'s project structure tree for `analytics/` omitted `analytics.schema.ts`** — every other
   ported module lists its own `*.schema.ts` there; analytics needs one too (six endpoints' query params).
   Added during F5.
+- **`dime-api` is reachable from this repo's sessions after all** — the "not reachable" note two entries
+  above was true in a different, remote execution environment, not this one. Confirmed during F7: a sibling
+  `dime-api` checkout exists on this machine and was running live on `:4000`, sharing this repo's
+  `JWT_ACCESS_SECRET`/database. Check for a live sibling checkout before assuming the frontend-fixture
+  fallback is the only option — it produces a stronger contract check than reading `tdd.md`/`lib/api/*`
+  alone.
+- **`dime-api`'s global `@fastify/rate-limit` registration has no per-route exemption for `auth.routes.ts`**
+  (confirmed against the live `dime-api/src/server.ts` — contrast `csv.routes.ts`'s explicit per-route
+  override on export) — all 7 ported auth routes go through the same `checkGlobalRateLimit` every other
+  module uses. Worth checking per-route rate-limit overrides in the live source for any not-yet-ported
+  module before assuming the global default applies uniformly.
+- **Zod v4's top-level `z.email(...)` replaces the deprecated `z.string().email()`**, same deprecation
+  pattern already noted here for `z.cuid()` vs `z.string().cuid()`. Used in `auth.schema.ts` (F7) for
+  consistency with every other ported schema's cuid usage; `common.schema.ts` still uses the deprecated
+  chained form and wasn't touched (out of scope for the feature that found this).
 
 ## Tooling
 

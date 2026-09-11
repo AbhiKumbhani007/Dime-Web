@@ -10,14 +10,14 @@ stands as the completeness check either way.
 
 ## Feature 0: Foundational — shared plumbing every module needs
 
-- [X] T001 [P] Add backend-port dependencies: `prisma`, `@prisma/client`, `jose`, `bcryptjs`, `csv-parse`, `server-only` — pin every version against the npm registry at implementation time, not from this document `package.json`
-- [X] T002 Copy Prisma schema + migration history from `dime-api`; add the `RateLimitBucket` model and its own additive migration; point `dime-web`'s `.env.local` `DATABASE_URL`/`JWT_ACCESS_SECRET` at the same values `dime-api`'s `.env` already uses (same physical database — confirm with `prisma migrate status` showing zero drift before and after) `prisma/schema.prisma`, `prisma/migrations/20260405104227_init/`, `prisma/migrations/20260902210852_template_emoji_category_usage/`, `prisma/migrations/<timestamp>_add_rate_limit_bucket/` (after T001)
-- [X] T003 Add the Next.js Prisma client singleton, exported as `prisma` `lib/server/prisma.ts` (after T002)
-- [X] T004 [P] [TEST] Add the error-response helper and its fixed status→code enum (400/401/404/409/429/500) `lib/server/errorResponse.ts`, `lib/server/errorResponse.test.ts`
-- [X] T005 [TEST] Add the Postgres-backed rate limiter (fixed-window counter against `RateLimitBucket`, `x-forwarded-for` key, opportunistic cleanup of rows older than 1h) `lib/server/rateLimit.ts`, `lib/server/rateLimit.test.ts` (after T002, T003)
-- [X] T006 [P] [TEST] Add the bearer-token auth helper (verifies via `jose`, same `JWT_ACCESS_SECRET`/HS256/`{userId,email}` payload dime-api uses) `lib/server/auth/authenticate.ts`, `lib/server/auth/authenticate.test.ts` (after T001)
-- [X] T007 [P] Copy small shared utilities: `httpError.ts` (verbatim), `defaultCategories.ts` (verbatim), `common.schema.ts` (Zod v3→v4 syntax updated) `lib/server/httpError.ts`, `lib/server/defaultCategories.ts`, `lib/server/common.schema.ts` (after T002)
-- [X] T008 [P] Add the `/health` → `/api/health` rewrite (Kuberns' exact health-check path convention is an open question — this covers both without guessing) `next.config.ts`
+- [x] T001 [P] Add backend-port dependencies: `prisma`, `@prisma/client`, `jose`, `bcryptjs`, `csv-parse`, `server-only` — pin every version against the npm registry at implementation time, not from this document `package.json`
+- [x] T002 Copy Prisma schema + migration history from `dime-api`; add the `RateLimitBucket` model and its own additive migration; point `dime-web`'s `.env.local` `DATABASE_URL`/`JWT_ACCESS_SECRET` at the same values `dime-api`'s `.env` already uses (same physical database — confirm with `prisma migrate status` showing zero drift before and after) `prisma/schema.prisma`, `prisma/migrations/20260405104227_init/`, `prisma/migrations/20260902210852_template_emoji_category_usage/`, `prisma/migrations/<timestamp>_add_rate_limit_bucket/` (after T001)
+- [x] T003 Add the Next.js Prisma client singleton, exported as `prisma` `lib/server/prisma.ts` (after T002)
+- [x] T004 [P] [TEST] Add the error-response helper and its fixed status→code enum (400/401/404/409/429/500) `lib/server/errorResponse.ts`, `lib/server/errorResponse.test.ts`
+- [x] T005 [TEST] Add the Postgres-backed rate limiter (fixed-window counter against `RateLimitBucket`, `x-forwarded-for` key, opportunistic cleanup of rows older than 1h) `lib/server/rateLimit.ts`, `lib/server/rateLimit.test.ts` (after T002, T003)
+- [x] T006 [P] [TEST] Add the bearer-token auth helper (verifies via `jose`, same `JWT_ACCESS_SECRET`/HS256/`{userId,email}` payload dime-api uses) `lib/server/auth/authenticate.ts`, `lib/server/auth/authenticate.test.ts` (after T001)
+- [x] T007 [P] Copy small shared utilities: `httpError.ts` (verbatim), `defaultCategories.ts` (verbatim), `common.schema.ts` (Zod v3→v4 syntax updated) `lib/server/httpError.ts`, `lib/server/defaultCategories.ts`, `lib/server/common.schema.ts` (after T002)
+- [x] T008 [P] Add the `/health` → `/api/health` rewrite (Kuberns' exact health-check path convention is an open question — this covers both without guessing) `next.config.ts`
 
 **Checkpoint:** shared plumbing (Prisma, error shape, rate limiting, auth verification, small utilities) exists and is unit-tested. Nothing product-facing yet — no route handler exists.
 
@@ -26,8 +26,8 @@ stands as the completeness check either way.
 Chosen as the pilot per the TDD's own sequencing rationale: smallest surface, exercises every piece of
 Foundational plumbing against a real module before the rest proceed in parallel.
 
-- [X] T009 [P] [US1] [TEST] Port categories service + schema + tests (near-verbatim — `categories.service.ts` takes `prisma` as a plain argument, no framework coupling) `lib/server/categories/categories.service.ts`, `lib/server/categories/categories.schema.ts`, `lib/server/categories/categories.service.test.ts` (after T007)
-- [X] T010 [US1] [TEST] Implement health + categories route handlers and their contract tests — `GET /api/health`, `GET/POST /api/categories`, `PATCH/DELETE /api/categories/:id`; preserve the live-verified `{categories: [...]}` envelope (not a bare array) `app/api/health/route.ts`, `app/api/categories/route.ts`, `app/api/categories/[id]/route.ts`, `app/api/health/route.test.ts`, `app/api/categories/categories.routes.test.ts` (after T003, T004, T005, T006, T009)
+- [x] T009 [P] [US1] [TEST] Port categories service + schema + tests (near-verbatim — `categories.service.ts` takes `prisma` as a plain argument, no framework coupling) `lib/server/categories/categories.service.ts`, `lib/server/categories/categories.schema.ts`, `lib/server/categories/categories.service.test.ts` (after T007)
+- [x] T010 [US1] [TEST] Implement health + categories route handlers and their contract tests — `GET /api/health`, `GET/POST /api/categories`, `PATCH/DELETE /api/categories/:id`; preserve the live-verified `{categories: [...]}` envelope (not a bare array) `app/api/health/route.ts`, `app/api/categories/route.ts`, `app/api/categories/[id]/route.ts`, `app/api/health/route.test.ts`, `app/api/categories/categories.routes.test.ts` (after T003, T004, T005, T006, T009)
 
 **Checkpoint:** dime-web serves `/api/health` and every `/api/categories*` endpoint with contract parity
 to dime-api, including the F0 rate limiter now wired in (`/api/categories*` limited, `/api/health`
@@ -40,8 +40,8 @@ out to be infeasible until auth is ported in Feature 7 (see `tdd.md`'s "Done for
 
 ## Feature 2: Transactions
 
-- [X] T011 [P] [US2] [TEST] Port transactions service + schema + tests `lib/server/transactions/transactions.service.ts`, `lib/server/transactions/transactions.schema.ts`, `lib/server/transactions/transactions.service.test.ts` (after T007, T010)
-- [X] T012 [P] [US2] [TEST] Implement transactions route handlers + tests — `GET/POST /api/transactions`, `GET/PATCH/DELETE /api/transactions/:id`; preserve the live-verified `{items, nextCursor}` envelope `app/api/transactions/route.ts`, `app/api/transactions/[id]/route.ts`, `app/api/transactions/transactions.routes.test.ts` (after T003, T004, T005, T006, T011)
+- [x] T011 [P] [US2] [TEST] Port transactions service + schema + tests `lib/server/transactions/transactions.service.ts`, `lib/server/transactions/transactions.schema.ts`, `lib/server/transactions/transactions.service.test.ts` (after T007, T010)
+- [x] T012 [P] [US2] [TEST] Implement transactions route handlers + tests — `GET/POST /api/transactions`, `GET/PATCH/DELETE /api/transactions/:id`; preserve the live-verified `{items, nextCursor}` envelope `app/api/transactions/route.ts`, `app/api/transactions/[id]/route.ts`, `app/api/transactions/transactions.routes.test.ts` (after T003, T004, T005, T006, T011)
 
 **Checkpoint:** transactions are fully served by dime-web, including the optional `templateId` usage-bump
 side effect, cursor pagination, and category-ownership validation — verified by
@@ -53,15 +53,15 @@ originally documented — the identical class of correction F1 made for categori
 
 ## Feature 3: Budgets
 
-- [X] T013 [P] [US3] [TEST] Port budgets service + period helper + schema + tests `lib/server/budgets/budgets.service.ts`, `lib/server/budgets/budgets.period.ts`, `lib/server/budgets/budgets.schema.ts`, `lib/server/budgets/budgets.service.test.ts`, `lib/server/budgets/budgets.period.test.ts` (after T007, T010)
-- [X] T014 [P] [US3] [TEST] Implement budgets route handlers + tests — `GET/POST /api/budgets`, `PATCH/DELETE /api/budgets/:id`, `GET /api/budgets/:id/progress`; preserve the live-verified `{budgets: [...]}` envelope and the `colour` (British spelling) field name `app/api/budgets/route.ts`, `app/api/budgets/[id]/route.ts`, `app/api/budgets/[id]/progress/route.ts`, `app/api/budgets/budgets.routes.test.ts` (after T003, T004, T005, T006, T013)
+- [x] T013 [P] [US3] [TEST] Port budgets service + period helper + schema + tests `lib/server/budgets/budgets.service.ts`, `lib/server/budgets/budgets.period.ts`, `lib/server/budgets/budgets.schema.ts`, `lib/server/budgets/budgets.service.test.ts`, `lib/server/budgets/budgets.period.test.ts` (after T007, T010)
+- [x] T014 [P] [US3] [TEST] Implement budgets route handlers + tests — `GET/POST /api/budgets`, `PATCH/DELETE /api/budgets/:id`, `GET /api/budgets/:id/progress`; preserve the live-verified `{budgets: [...]}` envelope and the `colour` (British spelling) field name `app/api/budgets/route.ts`, `app/api/budgets/[id]/route.ts`, `app/api/budgets/[id]/progress/route.ts`, `app/api/budgets/budgets.routes.test.ts` (after T003, T004, T005, T006, T013)
 
 **Checkpoint:** budgets, including computed per-period progress, are fully served by dime-web.
 
 ## Feature 4: Templates
 
-- [X] T015 [P] [US4] [TEST] Port templates service + schema + tests `lib/server/templates/templates.service.ts`, `lib/server/templates/templates.schema.ts`, `lib/server/templates/templates.service.test.ts` (after T007, T010)
-- [X] T016 [P] [US4] [TEST] Implement templates route handlers + tests — `GET/POST /api/templates`, `PATCH/DELETE /api/templates/:id`; preserve the live-verified `{templates: [...]}` envelope `app/api/templates/route.ts`, `app/api/templates/[id]/route.ts`, `app/api/templates/templates.routes.test.ts` (after T003, T004, T005, T006, T015)
+- [x] T015 [P] [US4] [TEST] Port templates service + schema + tests `lib/server/templates/templates.service.ts`, `lib/server/templates/templates.schema.ts`, `lib/server/templates/templates.service.test.ts` (after T007, T010)
+- [x] T016 [P] [US4] [TEST] Implement templates route handlers + tests — `GET/POST /api/templates`, `PATCH/DELETE /api/templates/:id`; preserve the live-verified `{templates: [...]}` envelope `app/api/templates/route.ts`, `app/api/templates/[id]/route.ts`, `app/api/templates/templates.routes.test.ts` (after T003, T004, T005, T006, T015)
 
 **Checkpoint:** templates (quick-add chips) are fully served by dime-web — verified by
 `templates.service.test.ts`/`templates.routes.test.ts` plus a manual curl session against a running
@@ -71,8 +71,8 @@ documented — the identical class of correction F1 made for categories and F2 m
 
 ## Feature 5: Analytics
 
-- [X] T017 [P] [US5] [TEST] Port analytics service + period helper + tests (read-only) `lib/server/analytics/analytics.service.ts`, `lib/server/analytics/analytics.period.ts`, `lib/server/analytics/analytics.service.test.ts`, `lib/server/analytics/analytics.period.test.ts` (after T007, T010)
-- [X] T018 [P] [US5] [TEST] Implement the 6 analytics route handlers + tests — `overview`, `by-period`, `by-category`, `trends`, `top-days`, `budget-vs-actual`; the last reuses budgets' `listBudgets`, so it needs the budgets service, not just its own `app/api/analytics/overview/route.ts`, `app/api/analytics/by-period/route.ts`, `app/api/analytics/by-category/route.ts`, `app/api/analytics/trends/route.ts`, `app/api/analytics/top-days/route.ts`, `app/api/analytics/budget-vs-actual/route.ts`, `app/api/analytics/analytics.routes.test.ts` (after T003, T004, T005, T006, T013, T017)
+- [x] T017 [P] [US5] [TEST] Port analytics service + period helper + tests (read-only) `lib/server/analytics/analytics.service.ts`, `lib/server/analytics/analytics.period.ts`, `lib/server/analytics/analytics.service.test.ts`, `lib/server/analytics/analytics.period.test.ts` (after T007, T010)
+- [x] T018 [P] [US5] [TEST] Implement the 6 analytics route handlers + tests — `overview`, `by-period`, `by-category`, `trends`, `top-days`, `budget-vs-actual`; the last reuses budgets' `listBudgets`, so it needs the budgets service, not just its own `app/api/analytics/overview/route.ts`, `app/api/analytics/by-period/route.ts`, `app/api/analytics/by-category/route.ts`, `app/api/analytics/trends/route.ts`, `app/api/analytics/top-days/route.ts`, `app/api/analytics/budget-vs-actual/route.ts`, `app/api/analytics/analytics.routes.test.ts` (after T003, T004, T005, T006, T013, T017)
 
 **Checkpoint:** every analytics view (insights screen) is fully served by dime-web. **Corrected during
 F5**: `tdd.md`'s `by-period` contract row documented query params `bucket,from?,to?` and left the response
@@ -83,8 +83,8 @@ made once for their own module.
 
 ## Feature 6: Ledger
 
-- [ ] T019 [P] [US6] [TEST] Port ledger service + balance helper + schema + tests `lib/server/ledger/ledger.service.ts`, `lib/server/ledger/ledger.balance.ts`, `lib/server/ledger/ledger.schema.ts`, `lib/server/ledger/ledger.service.test.ts`, `lib/server/ledger/ledger.balance.test.ts` (after T007, T010)
-- [ ] T020 [P] [US6] [TEST] Implement ledger route handlers + tests — people CRUD, entries CRUD, settle-all with its optimistic-concurrency `expectedBalance` check (preserve exactly — the one explicit concurrency guard in this API); preserve the live-verified `{people, summary}` envelope `app/api/ledger/people/route.ts`, `app/api/ledger/people/[id]/route.ts`, `app/api/ledger/people/[id]/entries/route.ts`, `app/api/ledger/people/[id]/settle/route.ts`, `app/api/ledger/entries/[id]/route.ts`, `app/api/ledger/ledger.routes.test.ts` (after T003, T004, T005, T006, T019)
+- [x] T019 [P] [US6] [TEST] Port ledger service + balance helper + schema + tests `lib/server/ledger/ledger.service.ts`, `lib/server/ledger/ledger.balance.ts`, `lib/server/ledger/ledger.schema.ts`, `lib/server/ledger/ledger.service.test.ts`, `lib/server/ledger/ledger.balance.test.ts` (after T007, T010)
+- [x] T020 [P] [US6] [TEST] Implement ledger route handlers + tests — people CRUD, entries CRUD, settle-all with its optimistic-concurrency `expectedBalance` check (preserve exactly — the one explicit concurrency guard in this API); preserve the live-verified `{people, summary}` envelope `app/api/ledger/people/route.ts`, `app/api/ledger/people/[id]/route.ts`, `app/api/ledger/people/[id]/entries/route.ts`, `app/api/ledger/people/[id]/settle/route.ts`, `app/api/ledger/entries/[id]/route.ts`, `app/api/ledger/ledger.routes.test.ts` (after T003, T004, T005, T006, T019)
 
 **Checkpoint:** the IOU ledger, including settlement, is fully served by dime-web.
 
@@ -125,18 +125,21 @@ streaming), so it benefits most from every other module's route pattern already 
 ## Dry-run (per the `cut` skill's own bar, since `bun run board` isn't available)
 
 **T004 (foundational) — `lib/server/errorResponse.ts`**
+
 1. Files: `lib/server/errorResponse.ts`, `lib/server/errorResponse.test.ts` — both named in the TDD's project structure. ✓
 2. Exact signature and status→code table are in the TDD's Architecture row "Error `code` values". ✓
 3. Verified by its own colocated test, asserting each status produces its documented code + the message passed through. ✓
 4. Wrong input: none meaningful — it's a pure formatting function; TypeScript's status-union type is the guard. ✓
 
 **T014 (mid-stack) — budgets route handlers**
+
 1. Files named exactly in both the TDD's project structure and this task. ✓
 2. Request/response shapes, status codes, and the `colour` field-name gotcha are all in the TDD's API contracts table + `LEARNINGS.md`. ✓
 3. Verified by `budgets.routes.test.ts`, asserting the documented envelope and status codes per case. ✓
 4. Wrong/missing category reference → `404`; invalid body → `400` with the standardized shape (both named in the contracts table). ✓
 
 **T024 (edge) — csv route handlers**
+
 1. Files named exactly in both documents. ✓
 2. Exact headers, BOM, buffering approach, and the `429` rate-limit-exceeded shape are all specified (the BOM/headers are live-verified; the `429` shape is explicitly flagged in the TDD as designed-not-observed, which is itself the correct, honest answer — not a hole). ✓
 3. Verified by `csv.routes.test.ts` against the committed fixture `fixtures/csv-export-sample.csv` for byte-for-byte header/BOM parity. ✓

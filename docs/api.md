@@ -115,14 +115,14 @@ Every endpoint is read-only — there is no `POST`/`PATCH`/`DELETE` anywhere in 
 six can 404 or 409 (they read only the caller's own transactions/budgets, scoped by `userId`, never a
 specific resource by id).
 
-| Method | Path                                | Request                                    | Success                                                                                        | Errors                |
-| ------ | ----------------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------ | ---------------------- |
-| GET    | `/api/analytics/overview`           | query: `from?, to?`                         | `200` flat `{totalIncome, totalExpense, netBalance, transactionCount, avgDailySpend, from, to}`   | `400` (bad date), `401`, `429` |
-| GET    | `/api/analytics/by-period`          | query: `period(weekly\|monthly\|yearly), date?, categoryId?` | `200` flat `{period, labels: string[], income: number[], expense: number[], net: number[], from, to}` | `400` (bad `period`/`categoryId`), `401`, `429` |
-| GET    | `/api/analytics/by-category`        | query: `from?, to?, isIncome?`              | `200 { categories: CategoryBreakdownRow[] }` — each `{category: {id,name,emoji,color}\|null, total, percent, count}` | `400` (bad date), `401`, `429` |
-| GET    | `/api/analytics/trends`             | query: `months?(default 6, max 36)`         | `200 { trends: TrendRow[] }` — each `{month: "YYYY-MM", income, expense, net}`, oldest first     | `400` (bad `months`), `401`, `429` |
-| GET    | `/api/analytics/top-days`           | query: `from?, to?, limit?(default 10, max 100)` | `200 { days: TopDayRow[] }` — each `{date: "YYYY-MM-DD", total}`, expense-only, sorted descending | `400` (bad date/`limit`), `401`, `429` |
-| GET    | `/api/analytics/budget-vs-actual`   | —                                            | `200 { budgets: BudgetVsActualRow[] }` — each `{budget: {id,name,emoji,type}, allocated, spent, remaining, percent}` | `401`, `429`           |
+| Method | Path                              | Request                                                      | Success                                                                                                              | Errors                                          |
+| ------ | --------------------------------- | ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| GET    | `/api/analytics/overview`         | query: `from?, to?`                                          | `200` flat `{totalIncome, totalExpense, netBalance, transactionCount, avgDailySpend, from, to}`                      | `400` (bad date), `401`, `429`                  |
+| GET    | `/api/analytics/by-period`        | query: `period(weekly\|monthly\|yearly), date?, categoryId?` | `200` flat `{period, labels: string[], income: number[], expense: number[], net: number[], from, to}`                | `400` (bad `period`/`categoryId`), `401`, `429` |
+| GET    | `/api/analytics/by-category`      | query: `from?, to?, isIncome?`                               | `200 { categories: CategoryBreakdownRow[] }` — each `{category: {id,name,emoji,color}\|null, total, percent, count}` | `400` (bad date), `401`, `429`                  |
+| GET    | `/api/analytics/trends`           | query: `months?(default 6, max 36)`                          | `200 { trends: TrendRow[] }` — each `{month: "YYYY-MM", income, expense, net}`, oldest first                         | `400` (bad `months`), `401`, `429`              |
+| GET    | `/api/analytics/top-days`         | query: `from?, to?, limit?(default 10, max 100)`             | `200 { days: TopDayRow[] }` — each `{date: "YYYY-MM-DD", total}`, expense-only, sorted descending                    | `400` (bad date/`limit`), `401`, `429`          |
+| GET    | `/api/analytics/budget-vs-actual` | —                                                            | `200 { budgets: BudgetVsActualRow[] }` — each `{budget: {id,name,emoji,type}, allocated, spent, remaining, percent}` | `401`, `429`                                    |
 
 **`by-period`'s query params and response shape are not what `tdd.md` originally documented** — it had
 `bucket(weekly|monthly|yearly),from?,to?` in and an unspecified "series array" out. The actual contract
@@ -144,6 +144,49 @@ unverified-against-a-fixture, choice.
 has no live evidence either way; see `tickets/F5.md`'s Decisions table.
 
 **`top-days` and `budget-vs-actual`'s "spend"/"actual" both mean expense-only** (`isIncome: false`),
-matching `budgets.service.ts`'s own definition of spend. `budget-vs-actual` reuses `listBudgets` (Feature
-3) for the underlying computation but maps its rows into a narrower shape than `GET /api/budgets` returns
+matching `budgets.service.ts`'s own definition of spend. `budget-vs-actual` reuses `listBudgets` (Feature 3) for the underlying computation but maps its rows into a narrower shape than `GET /api/budgets` returns
 — no `category`, `daysRemaining`, `periodStart`/`periodEnd`, and `amount` renamed `allocated`.
+
+## Ledger
+
+All ten endpoints require a bearer token and are subject to the global rate limit, same as Categories.
+`LedgerPersonWithBalance` adds five computed fields (`balance`, `direction`, `activeEntryCount`,
+`settledEntryCount`, `lastActivityAt`) on top of the stored `LedgerPerson` row — every response below that
+includes a person returns this computed shape, never the bare stored row.
+
+| Method | Path                             | Request body                                                      | Success                                                                                                             | Errors                                                                        |
+| ------ | -------------------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| GET    | `/api/ledger/people`             | —                                                                 | `200 { people: LedgerPersonWithBalance[], summary: LedgerSummary }`                                                 | `401`, `429`                                                                  |
+| POST   | `/api/ledger/people`             | `{ name, phone?, note?, color? }` (`color` defaults to `#6366f1`) | `201 { person: LedgerPersonWithBalance }`                                                                           | `400` (validation), `401`, `409` (duplicate name, case-insensitive), `429`    |
+| GET    | `/api/ledger/people/:id`         | —                                                                 | `200 { person: LedgerPersonWithBalance }`                                                                           | `400` (invalid id), `401`, `404`, `429`                                       |
+| PATCH  | `/api/ledger/people/:id`         | partial `{ name?, phone?, note?, color? }`                        | `200 { person: LedgerPersonWithBalance }`                                                                           | `400` (invalid id or empty body), `401`, `404`, `409` (duplicate name), `429` |
+| DELETE | `/api/ledger/people/:id`         | —                                                                 | `204` (no body — cascades the person's entries)                                                                     | `400` (invalid id), `401`, `404`, `429`                                       |
+| GET    | `/api/ledger/people/:id/entries` | —                                                                 | `200 { person: LedgerPersonWithBalance, active: LedgerEntry[], settled: LedgerEntry[] }`                            | `400` (invalid id), `401`, `404`, `429`                                       |
+| POST   | `/api/ledger/people/:id/entries` | `{ amount, type("GAVE"\|"RECEIVED"), date, note? }`               | `201 { entry: LedgerEntry, person: LedgerPersonWithBalance }`                                                       | `400` (validation), `401`, `404` (person not owned), `429`                    |
+| PATCH  | `/api/ledger/entries/:id`        | partial `{ amount?, type?, date?, note?, settled? }`              | `200 { entry: LedgerEntry, person: LedgerPersonWithBalance }`                                                       | `400` (invalid id or empty body), `401`, `404`, `429`                         |
+| DELETE | `/api/ledger/entries/:id`        | —                                                                 | `204` (no body)                                                                                                     | `400` (invalid id), `401`, `404`, `429`                                       |
+| POST   | `/api/ledger/people/:id/settle`  | `{ expectedBalance? }`                                            | `200 { person: LedgerPersonWithBalance, settledCount, settledAmount, settledAt }` — bulk-settles every active entry | `400` (invalid id), `401`, `404`, `409` (see below), `429`                    |
+
+**Note on envelopes:** every response wrapping a person or entry uses a named key (`person`, `entry`) —
+`POST`/`GET :id`/`PATCH /people/:id` and `POST`/`PATCH` on entries were originally documented in
+`phases/001-merge-backend-into-nextjs/tdd.md` as returning the bare object; that was wrong (dime-api's
+actual source and dime-web's already-shipped `lib/api/ledger.ts` both wrap it), corrected during F6 — the
+same class of correction F1 through F4 each made once for their own module. Creating or updating an entry
+additionally returns the affected `person` alongside the `entry`, recomputed through the same balance path
+`GET /api/ledger/people` uses, so a client can update its list and detail caches without a refetch.
+
+**`settle`'s `409` has two distinct, unrelated causes**, both preserved from `dime-api`: (1) there are zero
+active (unsettled) entries for the person at all (`"No outstanding entries to settle"`), and (2) the
+**optimistic-concurrency check** — a supplied `expectedBalance` doesn't match the person's current computed
+balance (`"This balance changed — reopen the dialog and try again"`). The second is the one explicit
+concurrency guard anywhere in this API: `expectedBalance` is optional, so a caller that doesn't send it
+skips the check entirely and settles unconditionally. Both causes run inside one `$transaction`, so a
+concurrent settle attempt can never partially apply.
+
+**`GAVE` increases what the person owes you; `RECEIVED` decreases it** — `balance > 0` means they owe you,
+`balance < 0` means you owe them, and values within half a paisa (`±0.005`) of zero read as `SETTLED`
+(`direction`), guarding against `Float` accumulation error rather than representing a real amount.
+
+**Every direct lookup is scoped by `userId`, not just `id`** (`ledgerPerson`/`ledgerEntry` `findFirst`, and
+`computeBalances`'s underlying queries) — matches the defense-in-depth convention `2e58f9c` established for
+this codebase, rather than relying on a write-time invariant.

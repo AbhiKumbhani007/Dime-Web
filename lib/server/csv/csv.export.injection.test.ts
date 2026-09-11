@@ -163,8 +163,6 @@ describe('CSV export — formula/CSV-injection payloads are neutralized', () => 
       .mockResolvedValueOnce([])
 
     const csv = await exportToString(prisma)
-    expect(csv).toContain(
-      '2026-08-30,100.00,Expense,Groceries,Weekly shop\r\n'
-    )
+    expect(csv).toContain('2026-08-30,100.00,Expense,Groceries,Weekly shop\r\n')
   })
 })

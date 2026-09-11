@@ -26,7 +26,10 @@ import { getMe } from '@/lib/api/auth'
 
 type Status = 'loading' | 'ready' | 'unauthenticated'
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
+// Same-origin — see lib/api.ts's identical constant for why this is
+// computed (not dropped entirely) and guarded against SSR, where `window`
+// doesn't exist but this module's top-level code still runs.
+const API_URL = typeof window !== 'undefined' ? window.location.origin : ''
 
 export function SessionProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter()

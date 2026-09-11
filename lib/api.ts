@@ -1,6 +1,19 @@
 import ky, { type KyInstance, type Options } from 'ky'
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
+// dime-web now serves its own API routes (the backend-merge phase folded
+// dime-api's routes in under app/api/*) — every call goes to this app's own
+// origin, not a separately-hosted backend. `ky`'s `prefixUrl` must be an
+// absolute value (every lib/api/*.ts call site passes its path without a
+// leading slash, e.g. api.get('api/categories'), because `ky` throws if
+// `input` starts with `/` while `prefixUrl` is set) — a relative/empty
+// prefixUrl would make the browser resolve those paths against the current
+// page's path instead of the origin (e.g. `/settings/api/categories` from
+// `/settings/account`), which is wrong on every route except `/`.
+// `window` is guarded because this module's top-level code still runs
+// during SSR: SessionProvider (which wires this client up) sits under
+// app/(app)/layout.tsx, a 'use client' boundary that Next.js still
+// server-renders for the initial HTML.
+const API_URL = typeof window !== 'undefined' ? window.location.origin : ''
 
 // Lazy import to avoid circular deps — auth store is client-only
 function getAccessToken(): string | null {

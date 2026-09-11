@@ -728,6 +728,21 @@ describe('ledger routes', () => {
       expect(response.status).toBe(401)
     })
 
+    it('400s with "Invalid entry ID" for a non-cuid id, before checking the body', async () => {
+      const token = await signToken()
+      const response = await PATCH_ENTRY(
+        makeRequest('PATCH', 'http://localhost/api/ledger/entries/not-a-cuid', {
+          token,
+          body: { amount: 10 },
+        }),
+        { params: Promise.resolve({ id: 'not-a-cuid' }) }
+      )
+      expect(response.status).toBe(400)
+      const body = await response.json()
+      expect(body.error.message).toBe('Invalid entry ID')
+      expect(prisma.ledgerEntry.findFirst).not.toHaveBeenCalled()
+    })
+
     it("updates an entry → 200 {entry, person} with the person's balance recomputed", async () => {
       const token = await signToken()
       vi.mocked(prisma.ledgerEntry.findFirst).mockResolvedValueOnce(

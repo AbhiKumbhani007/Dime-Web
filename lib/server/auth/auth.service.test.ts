@@ -493,6 +493,30 @@ describe('auth service', () => {
       expect(result.user).toEqual(toUserProfile(created))
     })
 
+    it('creates a new user with name: null when the tokeninfo response omits the name claim', async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ email: 'noname@example.com' }),
+      })
+      const prisma = createMockPrisma()
+      prisma.user.findUnique.mockResolvedValue(null)
+      prisma.user.create.mockResolvedValue(
+        makeUser({ email: 'noname@example.com', name: null }) as never
+      )
+      prisma.refreshToken.create.mockResolvedValue({})
+      prisma.category.createMany.mockResolvedValue({ count: 18 })
+
+      await googleAuth(prisma, 'good-id-token')
+
+      expect(prisma.user.create).toHaveBeenCalledWith({
+        data: {
+          email: 'noname@example.com',
+          name: null,
+          passwordHash: null,
+        },
+      })
+    })
+
     it('reuses an existing user by email on repeat sign-in, without re-seeding categories', async () => {
       global.fetch = vi.fn().mockResolvedValue({
         ok: true,

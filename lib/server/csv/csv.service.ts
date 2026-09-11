@@ -26,9 +26,21 @@ const REQUIRED_COLUMNS = ['Date', 'Amount', 'Type', 'Category']
 
 // ── Export ───────────────────────────────────────────────────────────────────
 
+// A leading =, +, -, or @ makes Excel/Sheets/LibreOffice read the cell's
+// *logical* value as a formula rather than literal text when the file is
+// opened (CWE-1236 "CSV injection") — RFC-4180 quoting alone doesn't defend
+// against this, since it only escapes delimiters/quotes/newlines and a
+// spreadsheet app still evaluates the unquoted value. Mitigated the standard
+// way: prefix a single quote, which every major spreadsheet app treats as a
+// "force text" marker and does not display.
+function neutralizeFormulaPrefix(value: string): string {
+  return /^[=+\-@]/.test(value) ? `'${value}` : value
+}
+
 function toCsvField(value: string): string {
-  if (/["\r\n,]/.test(value)) return `"${value.replace(/"/g, '""')}"`
-  return value
+  const safe = neutralizeFormulaPrefix(value)
+  if (/["\r\n,]/.test(safe)) return `"${safe.replace(/"/g, '""')}"`
+  return safe
 }
 
 function formatCsvRow(row: Transaction & { category: Category }): string {

@@ -270,6 +270,27 @@ export async function settlePerson(
       data: { settled: true, settledAt },
     })
 
+    // Postgres's default READ COMMITTED isolation means this UPDATE's WHERE
+    // is re-evaluated against whatever is currently committed, not the
+    // transaction's original snapshot — so `count` can legitimately diverge
+    // from `active.length` under real concurrency: a second settle call for
+    // the same person racing this one finds 0 rows left to flip (the first
+    // to commit already claimed them), and a brand-new entry created between
+    // the read above and this UPDATE can be swept in unaccounted-for. Either
+    // way, `active`/`balance` above no longer describes what actually
+    // happened — surfacing a 200 here would report a phantom settledAmount
+    // for entries this request never touched (loser of a race) or silently
+    // fold a concurrently-created entry into "settled" without it ever
+    // appearing in any settledAmount total (found via adversarial two-request
+    // concurrency testing: app/api/ledger/ledger.settle.concurrency.test.ts).
+    // Throwing here rolls back any partial update this transaction made.
+    if (count !== active.length) {
+      throw httpError(
+        409,
+        'This balance changed — reopen the dialog and try again'
+      )
+    }
+
     return { settledCount: count, settledAmount: Math.abs(balance), settledAt }
   })
 

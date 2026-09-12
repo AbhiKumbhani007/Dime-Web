@@ -24,6 +24,10 @@ function createMockPrisma() {
   const prisma = {
     category: { findMany: vi.fn() },
     transaction: { findMany: vi.fn(), createMany: vi.fn() },
+    consumedPreviewToken: {
+      create: vi.fn().mockResolvedValue({}),
+      deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+    },
     $transaction: vi.fn(),
   }
   // Runs the callback against the same mock object, so `tx.*` inside
@@ -37,6 +41,10 @@ function createMockPrisma() {
     transaction: {
       findMany: ReturnType<typeof vi.fn>
       createMany: ReturnType<typeof vi.fn>
+    }
+    consumedPreviewToken: {
+      create: ReturnType<typeof vi.fn>
+      deleteMany: ReturnType<typeof vi.fn>
     }
     $transaction: ReturnType<typeof vi.fn>
   }

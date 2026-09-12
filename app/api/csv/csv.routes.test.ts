@@ -16,6 +16,10 @@ vi.mock('@/lib/server/prisma', () => ({
       createMany: vi.fn(),
     },
     category: { findMany: vi.fn() },
+    consumedPreviewToken: {
+      create: vi.fn(),
+      deleteMany: vi.fn(),
+    },
     $transaction: vi
       .fn()
       .mockImplementation((cb: (tx: unknown) => unknown) => cb(prisma)),
@@ -92,6 +96,15 @@ describe('csv routes', () => {
     vi.clearAllMocks()
     vi.mocked(prisma.rateLimitBucket.upsert).mockResolvedValue({
       count: 1,
+    } as never)
+    // commitImport's single-use enforcement — default to "claims cleanly" /
+    // "nothing stale to clean up" so tests that don't specifically exercise
+    // token-reuse rejection don't need to mock these individually.
+    vi.mocked(prisma.consumedPreviewToken.create).mockResolvedValue(
+      {} as never
+    )
+    vi.mocked(prisma.consumedPreviewToken.deleteMany).mockResolvedValue({
+      count: 0,
     } as never)
     vi.mocked(prisma.$transaction).mockImplementation(((
       cb: (tx: unknown) => unknown

@@ -12,6 +12,7 @@ process.env.JWT_ACCESS_SECRET =
 
 import {
   hashFileBytes,
+  hashPreviewToken,
   signPreviewToken,
   verifyPreviewToken,
 } from './csv.token'
@@ -35,6 +36,28 @@ describe('hashFileBytes', () => {
     const a = hashFileBytes(Buffer.from('hello'))
     const b = hashFileBytes(Buffer.from('hellp'))
     expect(a).not.toBe(b)
+  })
+})
+
+describe('hashPreviewToken', () => {
+  // Backs the single-use-import fix's ConsumedPreviewToken.tokenHash column
+  // — used to key that row without persisting the raw token.
+  it('is deterministic for identical token strings', () => {
+    const token = signPreviewToken(PAYLOAD)
+    expect(hashPreviewToken(token)).toBe(hashPreviewToken(token))
+  })
+
+  it('differs when only the signature segment differs', () => {
+    const token = signPreviewToken(PAYLOAD)
+    const [payloadB64] = token.split('.')
+    const tampered = `${payloadB64}.a-completely-different-signature`
+    expect(hashPreviewToken(token)).not.toBe(hashPreviewToken(tampered))
+  })
+
+  it('differs when only the payload segment differs', () => {
+    const a = signPreviewToken(PAYLOAD)
+    const b = signPreviewToken({ ...PAYLOAD, readyCount: PAYLOAD.readyCount + 1 })
+    expect(hashPreviewToken(a)).not.toBe(hashPreviewToken(b))
   })
 })
 

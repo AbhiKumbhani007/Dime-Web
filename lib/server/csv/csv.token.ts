@@ -1,7 +1,10 @@
 import 'server-only'
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto'
 
-const PREVIEW_TOKEN_TTL_MS = 30 * 60 * 1000
+// Exported so csv.service.ts's ConsumedPreviewToken cleanup (see commitImport)
+// can size its own retention window relative to this TTL, rather than
+// hardcoding a second copy of the same number.
+export const PREVIEW_TOKEN_TTL_MS = 30 * 60 * 1000
 
 // Reads process.env directly rather than a shared config module — this repo
 // has no such module (see lib/server/auth/authenticate.ts's identical
@@ -30,6 +33,14 @@ export type VerifyResult =
 
 export function hashFileBytes(buffer: Buffer): string {
   return createHash('sha256').update(buffer).digest('hex')
+}
+
+// Hashes the FULL token string — signature included — so a tampered token
+// (different payload or signature) can never collide with a real, previously
+// issued token's hash. Used by commitImport's single-use enforcement to key
+// the ConsumedPreviewToken row without storing the raw token itself.
+export function hashPreviewToken(token: string): string {
+  return createHash('sha256').update(token).digest('hex')
 }
 
 function sign(payloadB64: string): string {

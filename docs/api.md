@@ -252,7 +252,18 @@ every other mutating route.
 | ------ | ------------------------- | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
 | GET    | `/api/csv/export`         | query: `from?, to?`                                          | `200`, `Content-Type: text/csv; charset=utf-8`, `Content-Disposition: attachment; filename="paisa-export-<yyyy-MM-dd>.csv"`, `Cache-Control: no-store`; body is a UTF-8 BOM then `Date,Amount,Type,Category,Note\r\n` then one CSV line per transaction — **no JSON envelope**, the only route in the API without one | `400` (bad `from`/`to`), `401`, `429`                                             |
 | POST   | `/api/csv/import/preview` | multipart `file` (`.csv`, ≤2MB, size checked before any bytes are read) | `200 {previewToken, fileName, totalRows, readyCount, duplicateCount, errorCount, errors: ImportErrorRow[], errorsTruncated, duplicates, expiresAt}` — `previewToken` is a signed, 30-minute-TTL HMAC token, not a bearer/JWT token | `400` (no file, wrong extension, oversized, unparseable CSV, missing required column, >5000 rows), `401`, `429` |
-| POST   | `/api/csv/import/commit`  | multipart `file` (same file previewed) + `previewToken`      | `201 {imported, skippedDuplicates, skippedErrors, totalRows, driftedFromPreview}` — bulk-inserts the ready rows in chunks of 500 inside one Prisma `$transaction` | `400` (no file, wrong extension, missing/malformed/expired/wrong-user `previewToken`), `401`, `409` (uploaded file's hash doesn't match the previewed file), `429` |
+| POST   | `/api/csv/import/commit`  | multipart `file` (same file previewed) + `previewToken`      | `201 {imported, skippedDuplicates, skippedErrors, totalRows, driftedFromPreview}` — bulk-inserts the ready rows in chunks of 500 inside one Prisma `$transaction` | `400` (no file, wrong extension, missing/malformed/expired/wrong-user `previewToken`), `401`, `409` (uploaded file's hash doesn't match the previewed file, **or** the `previewToken` has already been used to complete an import — see below), `429` |
+
+**`import/commit` single-use enforcement (security hardening added after the initial port).** A
+`previewToken` can now be committed exactly once. `commitImport` claims it inside its existing
+`$transaction`, as the first statement, by inserting a `ConsumedPreviewToken` row keyed on a SHA-256 hash of
+the full token string (`hashPreviewToken`, `lib/server/csv/csv.token.ts`); a second commit of the same token
+hits that row's unique constraint and gets a clean `409 "This import has already been completed"` before any
+transaction row is inserted — and since the claim lives inside the same `$transaction` as the insert loop, a
+failure anywhere in that loop rolls the claim back too, so a genuinely failed commit can still be retried
+with the same token. This also closes a real race: two concurrent commits of the same token used to both
+succeed and both insert (see `lib/server/csv/csv.service.adversarial.test.ts`'s updated "token-reuse root
+cause" test) — now only one of them can ever win the claim.
 
 **`phases/001-merge-backend-into-nextjs/tdd.md`'s contracts table under-specified `import/preview`'s
 response (glossed as `{previewToken, rows: [...]}`, which doesn't exist) and got `import/commit`'s status

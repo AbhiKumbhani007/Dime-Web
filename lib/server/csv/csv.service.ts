@@ -11,8 +11,10 @@ import {
 } from './csv.parse'
 import {
   hashFileBytes,
+  hashPreviewToken,
   signPreviewToken,
   verifyPreviewToken,
+  PREVIEW_TOKEN_TTL_MS,
 } from './csv.token'
 import type { ExportQuery } from './csv.schema'
 import { httpError } from '@/lib/server/httpError'
@@ -23,6 +25,13 @@ const MAX_DUPLICATE_SAMPLES = 20
 const EXPORT_PAGE_SIZE = 500
 const COMMIT_CHUNK_SIZE = 500
 const REQUIRED_COLUMNS = ['Date', 'Amount', 'Type', 'Category']
+// A consumed previewToken can never be legitimately re-presented after its
+// own signed TTL has passed anyway (verifyPreviewToken already rejects it as
+// EXPIRED before commitImport's consumption check ever runs) — this just
+// bounds how long the ConsumedPreviewToken row proving it was consumed
+// sticks around. The safety margin over the raw TTL is generous headroom
+// for clock skew/slow requests near the boundary, not a load-bearing value.
+const CONSUMED_PREVIEW_TOKEN_RETENTION_MS = PREVIEW_TOKEN_TTL_MS + 10 * 60 * 1000
 
 // ── Export ───────────────────────────────────────────────────────────────────
 
@@ -283,6 +292,18 @@ export async function commitImport(
   file: { buffer: Buffer; fileName: string },
   previewToken: string
 ): Promise<CommitResult> {
+  // Opportunistic cleanup, same "delete stale rows on every check" pattern as
+  // lib/server/rateLimit.ts's checkRateLimit — no separate cron. A consumed
+  // token can never be legitimately re-presented once its own signed TTL has
+  // passed, so nothing this old is ever worth keeping around.
+  await prisma.consumedPreviewToken.deleteMany({
+    where: {
+      consumedAt: {
+        lt: new Date(Date.now() - CONSUMED_PREVIEW_TOKEN_RETENTION_MS),
+      },
+    },
+  })
+
   const verified = verifyPreviewToken(previewToken)
   if (!verified.ok) {
     const message =
@@ -316,6 +337,27 @@ export async function commitImport(
   // propagates straight out of commitImport.
   await prisma.$transaction(
     async (tx) => {
+      // Single-use enforcement: claim this previewToken FIRST, before any
+      // row is inserted. A second commit of the same token (retry,
+      // double-click, or a concurrent duplicate request) hits the
+      // `tokenHash @unique` constraint and P2002s — caught below and turned
+      // into a clean 409. Doing this inside the transaction means a P2002
+      // here rolls back nothing (nothing has been inserted yet), and a
+      // failure anywhere in the insert loop below rolls this consumption
+      // record back too, so a failed commit can still be retried with the
+      // same token.
+      try {
+        await tx.consumedPreviewToken.create({
+          data: { tokenHash: hashPreviewToken(previewToken), userId },
+        })
+      } catch (err: unknown) {
+        const e = err as { code?: string }
+        if (e.code === 'P2002') {
+          throw httpError(409, 'This import has already been completed')
+        }
+        throw err
+      }
+
       for (const chunk of chunksOf(classified.ready, COMMIT_CHUNK_SIZE)) {
         await tx.transaction.createMany({
           data: chunk.map((row) => ({

@@ -18,13 +18,14 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  transactions  Transaction[]
-  categories    Category[]
-  budgets       Budget[]
-  templates     Template[]
-  ledgerPersons LedgerPerson[]
-  ledgerEntries LedgerEntry[]
-  refreshTokens RefreshToken[]
+  transactions          Transaction[]
+  categories            Category[]
+  budgets               Budget[]
+  templates             Template[]
+  ledgerPersons         LedgerPerson[]
+  ledgerEntries         LedgerEntry[]
+  refreshTokens         RefreshToken[]
+  consumedPreviewTokens ConsumedPreviewToken[]
 }
 
 model RefreshToken {
@@ -171,4 +172,20 @@ model RateLimitBucket {
   count       Int      @default(1)
 
   @@unique([key, windowStart])
+}
+
+// ─── CSV import single-use enforcement ─────────────────────────────────────────
+// dime-api never reads or writes this table — added fresh by dime-web, additive
+// only. Records that a given previewToken has already been spent by
+// `commitImport`, so a replayed/reused token (retry, double-click, or a
+// concurrent duplicate request) can be rejected with a 409 instead of silently
+// re-importing the same rows a second time.
+
+model ConsumedPreviewToken {
+  id         String   @id @default(cuid())
+  tokenHash  String   @unique
+  userId     String
+  consumedAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

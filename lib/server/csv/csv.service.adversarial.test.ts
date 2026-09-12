@@ -20,6 +20,10 @@ function createMockPrisma() {
   const prisma = {
     category: { findMany: vi.fn() },
     transaction: { findMany: vi.fn(), createMany: vi.fn() },
+    consumedPreviewToken: {
+      create: vi.fn().mockResolvedValue({}),
+      deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+    },
     $transaction: vi.fn(),
   }
   prisma.$transaction.mockImplementation((cb: (tx: unknown) => unknown) =>
@@ -30,6 +34,10 @@ function createMockPrisma() {
     transaction: {
       findMany: ReturnType<typeof vi.fn>
       createMany: ReturnType<typeof vi.fn>
+    }
+    consumedPreviewToken: {
+      create: ReturnType<typeof vi.fn>
+      deleteMany: ReturnType<typeof vi.fn>
     }
     $transaction: ReturnType<typeof vi.fn>
   }
@@ -236,28 +244,41 @@ describe('commitImport — formula payloads are stored verbatim, only export esc
   })
 })
 
-describe('commitImport — deterministic proof of the token-reuse root cause', () => {
-  // Live-verified separately (real dev server, real Postgres, two genuinely
-  // concurrent HTTP commit requests reusing the same previewToken): both
-  // requests returned 201 `imported: 1` and the database ended up with TWO
-  // duplicate transactions instead of one. That result depends on real
-  // network/DB timing and can't be reproduced deterministically with a
-  // mocked Prisma client. What *can* be shown deterministically here is the
-  // root cause: commitImport has no independent "this token was already
-  // consumed" state of its own — it relies entirely on re-querying
-  // `transaction.findMany` at classification time. If two calls happen to
-  // observe the *same* pre-insert snapshot (exactly what happens when their
-  // DB round trips overlap), nothing in this function stops both from
-  // importing. This is a known gap, not something this test suite patches —
-  // see the accompanying report for why (a correct fix needs a persisted,
-  // single-use consumption record, i.e. a schema change).
-  it('two sequential commits of the same token both succeed and both insert, when neither call observes the other’s write', async () => {
+describe('commitImport — token-reuse root cause, now fixed by single-use enforcement', () => {
+  // UPDATED for the CSV previewToken single-use fix (ConsumedPreviewToken).
+  // This describe block originally documented a real bug, found via live
+  // testing (real dev server, real Postgres, two genuinely concurrent HTTP
+  // commit requests reusing the same previewToken): both requests returned
+  // 201 `imported: 1` and the database ended up with TWO duplicate
+  // transactions instead of one, because commitImport had no independent
+  // "this token was already consumed" state of its own — it relied entirely
+  // on re-querying `transaction.findMany` at classification time, so two
+  // calls observing the same pre-insert snapshot could both import.
+  //
+  // The fix adds a persisted, single-use consumption record
+  // (ConsumedPreviewToken, keyed by a hash of the full token) created as the
+  // FIRST statement inside commitImport's existing $transaction — a second
+  // attempt to create that row hits the `tokenHash @unique` constraint
+  // (P2002) and is turned into a clean 409, before any row is inserted. This
+  // test is intentionally updated in place (rather than left red or deleted)
+  // to assert the new, fixed behavior — flagged explicitly since editing a
+  // pre-existing test file to assert the OPPOSITE of what it used to assert
+  // is unusual, but correct here: the bug it documented is exactly what this
+  // fix resolves.
+  it('two sequential commits of the same token: the first succeeds, the second gets a clean 409 and does NOT insert a second batch', async () => {
     const prisma = createMockPrisma()
     prisma.category.findMany.mockResolvedValue([
       { id: CATEGORY_ID, name: 'Groceries' },
     ])
     prisma.transaction.findMany.mockResolvedValue([]) // stays empty for both calls — simulates two overlapping reads before either write is visible
     prisma.transaction.createMany.mockResolvedValue({ count: 1 })
+    prisma.consumedPreviewToken.create
+      .mockResolvedValueOnce({}) // first commit claims the token
+      .mockRejectedValueOnce(
+        Object.assign(new Error('Unique constraint failed on tokenHash'), {
+          code: 'P2002',
+        })
+      )
 
     const buffer = csvBuffer(
       'Date,Amount,Type,Category,Note\r\n2026-08-30,1250.00,Expense,Groceries,Weekly shop\r\n'
@@ -273,15 +294,22 @@ describe('commitImport — deterministic proof of the token-reuse root cause', (
       { buffer, fileName: 'import.csv' },
       preview.previewToken
     )
-    const second = await commitImport(
-      prisma,
-      USER_ID,
-      { buffer, fileName: 'import.csv' },
-      preview.previewToken
-    )
-
     expect(first.imported).toBe(1)
-    expect(second.imported).toBe(1) // no single-use guard rejects the replay
-    expect(prisma.transaction.createMany).toHaveBeenCalledTimes(2)
+
+    await expect(
+      commitImport(
+        prisma,
+        USER_ID,
+        { buffer, fileName: 'import.csv' },
+        preview.previewToken
+      )
+    ).rejects.toMatchObject({
+      statusCode: 409,
+      message: 'This import has already been completed',
+    })
+
+    // The single-use guard rejects the replay BEFORE any insert — only the
+    // first commit's batch ever reached transaction.createMany.
+    expect(prisma.transaction.createMany).toHaveBeenCalledTimes(1)
   })
 })

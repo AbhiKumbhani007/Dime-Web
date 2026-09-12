@@ -441,6 +441,8 @@ describe('auth service', () => {
         message: 'Current password is incorrect',
       })
       expect(prisma.user.update).not.toHaveBeenCalled()
+      // A rejected attempt must never revoke real sessions.
+      expect(prisma.refreshToken.deleteMany).not.toHaveBeenCalled()
     })
 
     it('re-hashes and stores the new password on a correct old password', async () => {
@@ -454,6 +456,65 @@ describe('auth service', () => {
       const newHash = prisma.user.update.mock.calls[0][0].data
         .passwordHash as string
       expect(await bcrypt.compare('brandnewpw', newHash)).toBe(true)
+    })
+
+    it('revokes every refresh-token row for the user after a successful change, forcing every device to re-login', async () => {
+      const prisma = createMockPrisma()
+      const hash = await bcrypt.hash('oldpassword', 10)
+      prisma.user.findUnique.mockResolvedValue(makeUser({ passwordHash: hash }))
+      prisma.user.update.mockResolvedValue(makeUser())
+      prisma.refreshToken.deleteMany.mockResolvedValue({ count: 3 })
+
+      await updatePassword(prisma, 'user_1', 'oldpassword', 'brandnewpw')
+
+      expect(prisma.refreshToken.deleteMany).toHaveBeenCalledWith({
+        where: { userId: 'user_1' },
+      })
+    })
+
+    it('the old refresh token 401s on the next /api/auth/refresh call, since its row was deleted', async () => {
+      const prisma = createMockPrisma()
+      const hash = await bcrypt.hash('oldpassword', 10)
+      prisma.user.findUnique.mockResolvedValue(makeUser({ passwordHash: hash }))
+      prisma.user.update.mockResolvedValue(makeUser())
+      prisma.refreshToken.deleteMany.mockResolvedValue({ count: 1 })
+
+      await updatePassword(prisma, 'user_1', 'oldpassword', 'brandnewpw')
+
+      // Simulates the real DB post-deleteMany: the row is gone.
+      prisma.refreshToken.findUnique.mockResolvedValue(null)
+      await expect(
+        refreshTokens(prisma, 'the-old-refresh-token')
+      ).rejects.toMatchObject({ statusCode: 401 })
+    })
+
+    it('does NOT invalidate an access token issued before the change — access tokens are short-lived (15m), stateless JWTs with no server-side blocklist, by design', async () => {
+      // Documents the accepted tradeoff explicitly (see auth.service.ts's
+      // updatePassword comment and docs/api.md's me/password row): an
+      // access token minted moments before a password change keeps working
+      // until its own natural expiry. Proven directly rather than by
+      // waiting out the real 15-minute TTL — updatePassword never touches
+      // anything the access token's own signature/exp verification depends
+      // on (it only writes User.passwordHash and deletes RefreshToken rows),
+      // so a token issued beforehand must still verify identically after.
+      const prisma = createMockPrisma()
+      const hash = await bcrypt.hash('oldpassword', 10)
+      const user = makeUser({ passwordHash: hash })
+      prisma.user.findUnique.mockResolvedValue(user)
+      prisma.user.update.mockResolvedValue(makeUser())
+      prisma.refreshToken.create.mockResolvedValue({})
+      prisma.refreshToken.deleteMany.mockResolvedValue({ count: 1 })
+
+      const { accessToken } = await issueTokens(prisma, user)
+
+      await updatePassword(prisma, user.id, 'oldpassword', 'brandnewpw')
+
+      const { payload } = await jwtVerify(
+        accessToken,
+        new TextEncoder().encode(TEST_SECRET),
+        { algorithms: ['HS256'] }
+      )
+      expect(payload.userId).toBe(user.id)
     })
   })
 

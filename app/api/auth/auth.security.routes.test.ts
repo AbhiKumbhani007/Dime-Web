@@ -28,6 +28,8 @@ vi.mock('@/lib/server/prisma', () => ({
       create: vi.fn(),
       findUnique: vi.fn(),
       delete: vi.fn(),
+      deleteMany: vi.fn(),
+      updateMany: vi.fn(),
     },
     category: {
       createMany: vi.fn(),
@@ -94,6 +96,16 @@ describe('auth routes — adversarial security cases', () => {
     vi.mocked(prisma.category.createMany).mockResolvedValue({
       count: 18,
     } as never)
+    // updatePassword()'s post-change session revocation (deleteMany) and
+    // refreshTokens()'s cleanup/atomic-claim calls run on every relevant
+    // request — default to harmless values so tests that don't specifically
+    // exercise these mechanics don't need to mock them individually.
+    vi.mocked(prisma.refreshToken.deleteMany).mockResolvedValue({
+      count: 0,
+    } as never)
+    vi.mocked(prisma.refreshToken.updateMany).mockResolvedValue({
+      count: 1,
+    } as never)
   })
 
   afterEach(() => {
@@ -107,7 +119,12 @@ describe('auth routes — adversarial security cases', () => {
       // pins the *actual* (not assumed) behavior: a token minted before the
       // password change keeps working until its own 15-minute TTL expires,
       // password change is not itself a revocation event for access tokens.
-      // Not documented one way or the other in tdd.md/LEARNINGS.md.
+      // This IS now documented, explicitly, as an accepted tradeoff — see
+      // auth.service.ts's updatePassword comment and docs/api.md's
+      // `me/password` row: no server-side blocklist exists or should be
+      // built for short-TTL access tokens. Refresh tokens are a different
+      // story — see the next test — since those ARE revoked on a password
+      // change (Fix 2).
       const bcrypt = (await import('bcryptjs')).default
       const oldHash = await bcrypt.hash('oldpassword', 10)
       vi.mocked(prisma.user.findUnique).mockResolvedValue(
@@ -135,6 +152,38 @@ describe('auth routes — adversarial security cases', () => {
         })
       )
       expect(meResponse.status).toBe(200)
+    })
+
+    it('a refresh token issued before the change 401s on /api/auth/refresh afterward — every device is forced to re-login (Fix 2)', async () => {
+      const bcrypt = (await import('bcryptjs')).default
+      const oldHash = await bcrypt.hash('oldpassword', 10)
+      vi.mocked(prisma.user.findUnique).mockResolvedValue(
+        baseUser({ passwordHash: oldHash }) as never
+      )
+      vi.mocked(prisma.user.update).mockResolvedValue(baseUser() as never)
+      const token = await signToken()
+
+      const changeResponse = await passwordPatch(
+        makeRequest('PATCH', 'http://localhost/api/auth/me/password', {
+          token,
+          body: { oldPassword: 'oldpassword', newPassword: 'brandnewpw' },
+        })
+      )
+      expect(changeResponse.status).toBe(200)
+      expect(prisma.refreshToken.deleteMany).toHaveBeenCalledWith({
+        where: { userId: 'user_1' },
+      })
+
+      // Simulates the real DB post-deleteMany: any pre-change refresh token
+      // row is gone.
+      const { POST: refresh } = await import('./refresh/route')
+      vi.mocked(prisma.refreshToken.findUnique).mockResolvedValue(null)
+      const refreshResponse = await refresh(
+        makeRequest('POST', 'http://localhost/api/auth/refresh', {
+          body: { refreshToken: 'pre-change-refresh-token' },
+        })
+      )
+      expect(refreshResponse.status).toBe(401)
     })
 
     it('the OLD password no longer works for login after a successful change', async () => {

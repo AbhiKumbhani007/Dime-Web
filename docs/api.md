@@ -45,7 +45,7 @@ the exact algorithm and `lib/server/auth/auth.refresh-reuse.security.test.ts` /
 | POST   | `/api/auth/logout`      | none | `{ refreshToken }`                | `204` (idempotent — no-ops if token not found)    | `400` (validation), `429`                                               |
 | GET    | `/api/auth/me`          | yes  | —                                  | `200 UserProfile` (flat)                          | `401`, `404` (token valid but the user row no longer exists), `429`     |
 | PATCH  | `/api/auth/me`          | yes  | `{ name?, theme? }`               | `200 UserProfile` (flat)                          | `401`, `429`                                                             |
-| PATCH  | `/api/auth/me/password` | yes  | `{ oldPassword, newPassword }`    | `200 {}` (empty object)                           | `400` (wrong old password, or `newPassword` under 8 chars), `401`, `429` |
+| PATCH  | `/api/auth/me/password` | yes  | `{ oldPassword, newPassword }`    | `200 {}` (empty object) — also revokes every `RefreshToken` row for this user (see below) | `400` (wrong old password, or `newPassword` under 8 chars), `401`, `429` |
 | DELETE | `/api/auth/me`          | yes  | —                                  | `204`                                              | `401`, `429`                                                             |
 | POST   | `/api/auth/google`      | none | `{ idToken }`                     | `200 { accessToken, refreshToken, user }` (flat)  | `400` (validation), `401` (invalid Google token / missing `email` claim), `429` |
 
@@ -54,6 +54,15 @@ success bodies are **flat** (`{accessToken,refreshToken,user}`, no wrapper), mat
 `dime-api` shape. `me` GET/PATCH return a flat `UserProfile`, not `{user: UserProfile}`.
 
 `UserProfile`: `{ id, email, name: string | null, theme, createdAt }`.
+
+**Password change revokes existing sessions (security hardening added after the initial port).** A
+successful `PATCH /api/auth/me/password` deletes every `RefreshToken` row for that user, so every other
+logged-in device's next `/api/auth/refresh` call gets a `401` and has to go through `/api/auth/login` again
+with the new password. **Access tokens already issued are unaffected until their own natural expiry** —
+they're short-lived (15-minute TTL), stateless `jose`-signed JWTs with no server-side blocklist, and none is
+built for this change either (the same short-TTL reasoning that already avoids needing refresh-token-style
+revocation for access tokens elsewhere in this API). This is an accepted, explicitly documented tradeoff: a
+token minted moments before the password change keeps authenticating requests for up to 15 more minutes.
 
 ## Categories
 

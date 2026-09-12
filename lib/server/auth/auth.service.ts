@@ -259,6 +259,20 @@ export async function updatePassword(
     where: { id: userId },
     data: { passwordHash },
   })
+
+  // A password change is a strong signal that every *other* logged-in
+  // session should be forced to re-authenticate — deleting every
+  // RefreshToken row for this user means every device's next
+  // /api/auth/refresh call 401s, so it has to go through /api/auth/login
+  // with the new password. Access tokens already issued are short-lived
+  // (15-minute TTL, stateless JWTs, see ACCESS_TOKEN_TTL) — there is no
+  // server-side blocklist for them (and none should be built for this: the
+  // same short-TTL reasoning already used elsewhere in this codebase to
+  // avoid needing refresh-token-style revocation for access tokens applies
+  // here too). This is an accepted, documented tradeoff, not an oversight:
+  // an access token minted moments before the password change keeps working
+  // until its own natural expiry, at most 15 minutes later.
+  await prisma.refreshToken.deleteMany({ where: { userId } })
 }
 
 export async function deleteMe(

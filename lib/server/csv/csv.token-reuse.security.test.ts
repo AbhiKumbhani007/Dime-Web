@@ -72,10 +72,7 @@ describe('hashPreviewToken', () => {
   })
 
   it('hashes the FULL token (payload + signature) — a tampered signature never collides with the real hash', () => {
-    const [payload, signature] = [
-      'same-payload-segment',
-      'real-signature',
-    ]
+    const [payload, signature] = ['same-payload-segment', 'real-signature']
     const real = `${payload}.${signature}`
     const tampered = `${payload}.a-different-signature`
     expect(hashPreviewToken(real)).not.toBe(hashPreviewToken(tampered))
@@ -110,12 +107,12 @@ describe('commitImport — previewToken single-use enforcement', () => {
     expect(first.imported).toBe(1)
     expect(prisma.transaction.createMany).toHaveBeenCalledTimes(1)
 
-    await expect(commitOnce(prisma, preview.previewToken)).rejects.toMatchObject(
-      {
-        statusCode: 409,
-        message: 'This import has already been completed',
-      }
-    )
+    await expect(
+      commitOnce(prisma, preview.previewToken)
+    ).rejects.toMatchObject({
+      statusCode: 409,
+      message: 'This import has already been completed',
+    })
 
     // No second batch of transactions was ever inserted for the replay.
     expect(prisma.transaction.createMany).toHaveBeenCalledTimes(1)

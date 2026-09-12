@@ -80,20 +80,61 @@ Uint8Array. Received an instance of Uint8Array"` when run in Vitest's default `j
   above, this doesn't throw or fail a naive port's tests unless the test asserts the actual message
   text, not just pass/fail — write that assertion for any v3→v4 enum port.
 
-- **`dime-api` is not reachable from this repo's sessions** — repository scope for this project is
-  `dime-web` only, and no sibling `dime-api` checkout exists here (confirmed via `list_repos` during F5).
-  For any contract `tdd.md` leaves vague, the substitute "live system" is `dime-web`'s own already-shipped
-  frontend client/hooks/tests, which already depend on the real shape in production code — same source
-  F1 through F4 leaned on for their own "documented bare, actually wrapped" corrections.
+- **`dime-api` reachability depends on the execution environment, not on the repo** — F5's session had no
+  sibling `dime-api` checkout (confirmed via `list_repos`) and fell back to `dime-web`'s own already-shipped
+  frontend client/hooks/tests as the substitute "live system" for any contract `tdd.md` left vague. F6's
+  session, on a different host, had a running `dime-api` checkout at `../dime-api` with its dev server live
+  on `:4000` — read directly as the primary port source. Don't assume either way from a prior ticket's
+  session; check `list_repos`/the filesystem at the start of each ticket instead. Either substitute is
+  valid; dime-web's shipped frontend client remains a useful cross-check even when dime-api is reachable
+  (both agreed exactly, for every ledger envelope, during F6).
 - **Prisma's `groupBy` resolves `_count: true` to a plain `number` per group** — confirmed against the
   generated `.prisma/client` types (`TransactionGroupByOutputType`'s conditional type: `P extends '_count'
-  ? T[P] extends boolean ? number : ...`). This differs from `aggregate()`, where `_count: true` also
-  yields a number, but a *field-scoped* form (`_count: {someField: true}`) yields an object either way —
+? T[P] extends boolean ? number : ...`). This differs from `aggregate()`, where `_count: true` also
+  yields a number, but a _field-scoped_ form (`_count: {someField: true}`) yields an object either way —
   worth re-checking the generated types rather than assuming, same spirit as this file's other Zod/Prisma
   version-surface entries.
 - **`tdd.md`'s project structure tree for `analytics/` omitted `analytics.schema.ts`** — every other
   ported module lists its own `*.schema.ts` there; analytics needs one too (six endpoints' query params).
   Added during F5.
+- **Zod v4's `z.number()` already rejects `Infinity`/`NaN` at the base type check**, before any
+  `.finite(message)`/`.refine(...)` chained after it ever runs — confirmed live via `node -e` against the
+  installed `zod@4.3.6`. A v3-authored custom message on `.finite(...)` (e.g. ledger's
+  `SettleBodySchema`'s `expectedBalance: z.number().finite('expectedBalance must be a finite number')`,
+  ported near-verbatim from `dime-api`) never actually surfaces — the rejection still happens (400s
+  correctly), but with v4's generic `"Invalid input: expected number, received Infinity"`-shaped message
+  instead. Same class as the already-documented `errorMap`/`.min(1, msg)` v3→v4 message quirks; write the
+  test to assert `success === false` only, not the literal message, for any ported `.finite()`/`Infinity`-
+  adjacent check. Found during F6.
+- **`dime-api`'s global `@fastify/rate-limit` registration has no per-route exemption for `auth.routes.ts`**
+  (confirmed against the live `dime-api/src/server.ts` — contrast `csv.routes.ts`'s explicit per-route
+  override on export) — all 7 ported auth routes go through the same `checkGlobalRateLimit` every other
+  module uses. Worth checking per-route rate-limit overrides in the live source for any not-yet-ported
+  module before assuming the global default applies uniformly.
+- **Zod v4's top-level `z.email(...)` replaces the deprecated `z.string().email()`**, same deprecation
+  pattern already noted here for `z.cuid()` vs `z.string().cuid()`. Used in `auth.schema.ts` (F7) for
+  consistency with every other ported schema's cuid usage; `common.schema.ts` still uses the deprecated
+  chained form and wasn't touched (out of scope for the feature that found this).
+- **`Response.text()`'s `TextDecoder` strips a leading UTF-8 BOM (`U+FEFF`) by default** — a route test
+  that asserts the CSV export's leading-BOM byte via `(await response.text()).charCodeAt(0)` will always
+  see the first *content* character instead and fail, even though the actual wire bytes `new Response(body,
+  ...)` sends are correct (`TextEncoder`, used on the write side, does not strip anything — only decoding
+  does). Read `await response.arrayBuffer()` and check the raw bytes (`0xef, 0xbb, 0xbf`) instead. Found
+  while writing `app/api/csv/csv.routes.test.ts` during F8 — the same gotcha would silently hide a real BOM
+  regression in any future route that emits one.
+- **The full Playwright suite run serially against `dime-web`'s own `lib/server/rateLimit.ts` needs
+  `RATE_LIMIT_MAX` bumped in `.env.local` for local e2e runs, same as `tdd.md` already records `dime-api`'s
+  dev environment needed ("this dev environment's overridden 100000/min").** Local Playwright runs (and
+  `curl`/any other loopback client) never set `x-forwarded-for`, so every request falls into the single
+  `global:unknown` bucket `docs/operations.md` already warns about — with the code default (`100`/60s) and
+  120 tests each registering a fresh user and creating rows, the shared bucket exhausts itself almost
+  immediately and cascades into ~85 unrelated-looking failures (registration itself 429s, so everything
+  downstream in that test fails too). Not a product bug and not something F9's cutover introduced — it's the
+  first time the *full* suite ever ran against `dime-web`'s own limiter end-to-end (every earlier ticket's
+  e2e coverage either ran against `dime-api` or only exercised a handful of specs). Setting
+  `RATE_LIMIT_MAX=100000` in `.env.local` (gitignored, not a code change) made the full suite pass cleanly.
+  Worth carrying into any future local full-suite e2e run, and worth a dedicated CI-side value if this ever
+  runs in CI.
 
 ## Tooling
 
@@ -104,10 +145,12 @@ Uint8Array. Received an instance of Uint8Array"` when run in Vitest's default `j
   what the `setup` skill expects, not generated by a `bun run setup` command (there isn't one).
 - **`format:check` and `lint` are wired but not currently green.** `prettier` was never run on this
   codebase before — `npm run format:check` currently flags ~156 files. `eslint` currently reports 5
-  pre-existing errors: 2 in `e2e/fixtures.ts` are a known false-positive class (`react-hooks/rules-of-hooks`
-  misfiring on Playwright's `use` fixture pattern, which is unrelated to React hooks), 2 are real
-  pre-existing issues in `components/insights/TrendsChart.tsx` and
-  `components/providers/SessionProvider.tsx`, unrelated to any change made during this setup pass.
+  pre-existing errors: 3 in `e2e/fixtures.ts` are a known false-positive class (`react-hooks/rules-of-hooks`
+  misfiring on Playwright's `use` fixture pattern, which is unrelated to React hooks — **corrected during
+  F9**, this row previously said 2), 2 are real pre-existing issues in
+  `components/insights/TrendsChart.tsx` and `components/providers/SessionProvider.tsx`, unrelated to any
+  change made during this setup pass (both still confirmed pre-existing as of F9, via a same-file diff
+  against the pre-F9 commit for the one of the two this ticket also happened to touch).
   None of this was auto-fixed here — a `prettier --write .` across the whole tree is a real, reviewable
   diff and belongs in its own commit, not folded silently into project setup.
 - **`@vitest/coverage-v8` must be pinned to the exact same version as `vitest`** (currently `4.1.2`,

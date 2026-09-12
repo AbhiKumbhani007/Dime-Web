@@ -139,9 +139,12 @@ async function fillPasswordForm(values: {
 
 describe('AccountForm — change password', () => {
   it('shows the wrong-current-password error inline under the field, without redirecting', async () => {
-    const response = new Response(JSON.stringify({ error: 'Current password is incorrect' }), {
-      status: 400,
-    })
+    const response = new Response(
+      JSON.stringify({
+        error: { code: 'VALIDATION_ERROR', message: 'Current password is incorrect' },
+      }),
+      { status: 400 }
+    )
     const request = new Request('http://localhost/api/auth/me/password')
     vi.mocked(updatePassword).mockRejectedValueOnce(
       new HTTPError(response, request, {} as never),

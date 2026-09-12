@@ -55,23 +55,15 @@ export default defineConfig({
 
   projects: mobileOnly ? [mobileProject] : [mobileProject, tabletProject, desktopProject],
 
-  webServer: [
-    {
-      command: 'npm run dev',
-      cwd: '../dime-api',
-      url: 'http://localhost:4000/health',
-      reuseExistingServer: true,
-      timeout: 60_000,
-      stdout: 'pipe',
-      stderr: 'pipe',
-    },
-    {
-      command: 'npm run dev',
-      url: 'http://localhost:3000',
-      reuseExistingServer: true,
-      timeout: 90_000,
-      stdout: 'pipe',
-      stderr: 'pipe',
-    },
-  ],
+  // dime-api is no longer in the request path — the backend-merge phase
+  // folded every route dime-web needs into its own app/api/*, so only
+  // dime-web's own dev server needs to be booted for e2e.
+  webServer: {
+    command: 'npm run dev',
+    url: 'http://localhost:3000',
+    reuseExistingServer: true,
+    timeout: 90_000,
+    stdout: 'pipe',
+    stderr: 'pipe',
+  },
 })

@@ -1,5 +1,6 @@
 import { test, expect } from './fixtures'
 import { loginViaUI } from './fixtures'
+import { API_URL } from './helpers/api'
 
 test.describe('Auth flows', () => {
   test('signup creates account and redirects to /log', async ({ page, request }) => {
@@ -18,7 +19,7 @@ test.describe('Auth flows', () => {
     await expect(page).toHaveURL(/\/log$/)
 
     // Verify user exists on the backend
-    const res = await request.post('http://localhost:4000/api/auth/login', {
+    const res = await request.post(`${API_URL}/api/auth/login`, {
       data: { email, password },
     })
     expect(res.ok()).toBe(true)

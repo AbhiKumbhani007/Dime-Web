@@ -47,6 +47,8 @@ test.describe('Categories management', () => {
     const del = await api.delete(`/api/categories/${food.id}`)
     expect(del.status()).toBe(409)
     const body = await del.json()
-    expect(body.error).toMatch(/used/i)
+    // dime-web's standardized error envelope is { error: { code, message } },
+    // not the old flat { error: string } dime-api sent.
+    expect(body.error.message).toMatch(/used/i)
   })
 })

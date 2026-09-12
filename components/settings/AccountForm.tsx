@@ -97,9 +97,9 @@ const passwordSchema = z
 
 type PasswordFormValues = z.infer<typeof passwordSchema>
 
-/** The flat-string 400 body dime-api's auth routes send, e.g. `{ error: "Current password is incorrect" }`. */
-interface FlatApiError {
-  error?: string
+/** The standardized `{ error: { code, message } }` body every `dime-web` route now sends. */
+interface StructuredApiError {
+  error?: { code?: string; message?: string }
 }
 
 function PasswordSection() {
@@ -123,15 +123,15 @@ function PasswordSection() {
       reset()
       toastSuccess('Password updated')
     } catch (err: unknown) {
-      // dime-api returns 400 with a flat `{ error: string }` body for a wrong
-      // current password (not the structured `{ error: { code, message } }`
-      // shape other endpoints use) — surface it under the field, no toast,
-      // no redirect.
+      // /api/auth/me/password returns the standardized structured
+      // `{ error: { code, message } }` envelope for a wrong current
+      // password (400 VALIDATION_ERROR) — surface the message under the
+      // field, no toast, no redirect.
       if (err instanceof HTTPError && err.response.status === 400) {
-        const body: FlatApiError | null = await err.response.json().catch(() => null)
+        const body: StructuredApiError | null = await err.response.json().catch(() => null)
         setError('currentPassword', {
           type: 'manual',
-          message: body?.error ?? 'Current password is incorrect',
+          message: body?.error?.message ?? 'Current password is incorrect',
         })
         return
       }

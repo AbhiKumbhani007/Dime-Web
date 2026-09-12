@@ -46,6 +46,8 @@ function createMockPrisma() {
       create: vi.fn(),
       findUnique: vi.fn(),
       delete: vi.fn(),
+      deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
     category: {
       createMany: vi.fn(),
@@ -61,6 +63,8 @@ function createMockPrisma() {
       create: ReturnType<typeof vi.fn>
       findUnique: ReturnType<typeof vi.fn>
       delete: ReturnType<typeof vi.fn>
+      deleteMany: ReturnType<typeof vi.fn>
+      updateMany: ReturnType<typeof vi.fn>
     }
     category: { createMany: ReturnType<typeof vi.fn> }
   }
@@ -264,62 +268,96 @@ describe('auth service', () => {
       })
     })
 
-    it('rejects an expired token with a 401 httpError', async () => {
+    it('rejects an expired token with a 401 httpError, without attempting to claim it', async () => {
       const prisma = createMockPrisma()
       prisma.refreshToken.findUnique.mockResolvedValue({
         token: 'old-token',
         userId: 'user_1',
         expiresAt: new Date(Date.now() - 1000),
+        revokedAt: null,
         user: makeUser(),
       })
 
       await expect(refreshTokens(prisma, 'old-token')).rejects.toMatchObject({
         statusCode: 401,
       })
-      expect(prisma.refreshToken.delete).not.toHaveBeenCalled()
+      expect(prisma.refreshToken.updateMany).not.toHaveBeenCalled()
     })
 
-    it('rotates: deletes the old token and issues a new pair', async () => {
+    it('rotates: atomically claims the old token (sets revokedAt) and issues a new pair, without deleting the old row', async () => {
       const prisma = createMockPrisma()
       const user = makeUser()
       prisma.refreshToken.findUnique.mockResolvedValue({
         token: 'old-token',
         userId: user.id,
         expiresAt: new Date(Date.now() + 1000 * 60 * 60),
+        revokedAt: null,
         user,
       })
-      prisma.refreshToken.delete.mockResolvedValue({})
+      prisma.refreshToken.updateMany.mockResolvedValue({ count: 1 })
       prisma.refreshToken.create.mockResolvedValue({})
 
       const newTokens = await refreshTokens(prisma, 'old-token')
 
-      expect(prisma.refreshToken.delete).toHaveBeenCalledWith({
-        where: { token: 'old-token' },
+      expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith({
+        where: { token: 'old-token', revokedAt: null },
+        data: { revokedAt: expect.any(Date) },
       })
+      expect(prisma.refreshToken.delete).not.toHaveBeenCalled()
       expect(newTokens.refreshToken).not.toBe('old-token')
       expect(newTokens.accessToken).toEqual(expect.any(String))
     })
 
-    it('rejects reusing the same (now-deleted) token a second time', async () => {
-      // Simulates rotation at the storage level: once deleted, a second
-      // findUnique for the same token resolves null, same as a real DB would.
+    it('rejects reusing an already-rotated token (revokedAt already set) and revokes the whole session family', async () => {
+      // Simulates rotation at the storage level: once rotated, the row still
+      // exists but with revokedAt set (no longer deleted, see auth.service.ts).
       const prisma = createMockPrisma()
       const user = makeUser()
-      prisma.refreshToken.findUnique
-        .mockResolvedValueOnce({
-          token: 'old-token',
-          userId: user.id,
-          expiresAt: new Date(Date.now() + 1000 * 60 * 60),
-          user,
-        })
-        .mockResolvedValueOnce(null)
-      prisma.refreshToken.delete.mockResolvedValue({})
-      prisma.refreshToken.create.mockResolvedValue({})
-
-      await refreshTokens(prisma, 'old-token')
+      prisma.refreshToken.findUnique.mockResolvedValue({
+        token: 'old-token',
+        userId: user.id,
+        expiresAt: new Date(Date.now() + 1000 * 60 * 60),
+        revokedAt: new Date(),
+        user,
+      })
 
       await expect(refreshTokens(prisma, 'old-token')).rejects.toMatchObject({
         statusCode: 401,
+      })
+      expect(prisma.refreshToken.deleteMany).toHaveBeenCalledWith({
+        where: { userId: user.id },
+      })
+      // Reuse of an already-revoked token is a theft signal, not a race —
+      // never reaches the atomic-claim step.
+      expect(prisma.refreshToken.updateMany).not.toHaveBeenCalled()
+    })
+
+    it('rejects an unknown token (no row at all) without cascading — nothing to revoke', async () => {
+      const prisma = createMockPrisma()
+      prisma.refreshToken.findUnique.mockResolvedValue(null)
+
+      await expect(
+        refreshTokens(prisma, 'never-existed')
+      ).rejects.toMatchObject({ statusCode: 401 })
+
+      // The unconditional opportunistic cleanup call is fine (it's scoped to
+      // old revokedAt rows, not this user) — what must never happen is the
+      // userId-scoped cascade delete.
+      expect(prisma.refreshToken.deleteMany).not.toHaveBeenCalledWith({
+        where: { userId: expect.anything() },
+      })
+    })
+
+    it('opportunistically deletes revoked rows older than the retention window on every call', async () => {
+      const prisma = createMockPrisma()
+      prisma.refreshToken.findUnique.mockResolvedValue(null)
+
+      await expect(
+        refreshTokens(prisma, 'whatever')
+      ).rejects.toMatchObject({ statusCode: 401 })
+
+      expect(prisma.refreshToken.deleteMany).toHaveBeenCalledWith({
+        where: { revokedAt: { lt: expect.any(Date) } },
       })
     })
   })

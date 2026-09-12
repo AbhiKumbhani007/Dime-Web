@@ -8,6 +8,13 @@ import { seedDefaultCategories } from '@/lib/server/defaultCategories'
 const BCRYPT_ROUNDS = 10
 const REFRESH_TOKEN_EXPIRY_DAYS = 30
 const ACCESS_TOKEN_TTL = '15m'
+// How long a rotated-out (revokedAt set) RefreshToken row sticks around after
+// being revoked, purely so a replay of it can still be detected and trigger
+// the reuse cascade below. A replay presented more than a day after its own
+// rotation has already had every reasonable window to be caught — mirrors
+// lib/server/rateLimit.ts's RateLimitBucket cleanup-age reasoning (see its
+// CLEANUP_AGE_MS) and is documented the same way in tdd.md's Risks section.
+const REVOKED_TOKEN_RETENTION_MS = 24 * 60 * 60 * 1000
 
 export interface TokenPair {
   accessToken: string
@@ -132,32 +139,66 @@ export async function refreshTokens(
   prisma: PrismaClient,
   token: string
 ): Promise<TokenPair> {
+  // Opportunistic cleanup, same "delete stale rows on every check" pattern as
+  // lib/server/rateLimit.ts's checkRateLimit — no separate cron. Revoked rows
+  // only need to live long enough to catch a delayed replay (see
+  // REVOKED_TOKEN_RETENTION_MS above); anything older than that is safe to
+  // drop.
+  await prisma.refreshToken.deleteMany({
+    where: { revokedAt: { lt: new Date(Date.now() - REVOKED_TOKEN_RETENTION_MS) } },
+  })
+
   const existing = await prisma.refreshToken.findUnique({
     where: { token },
     include: { user: true },
   })
 
-  if (!existing || existing.expiresAt < new Date()) {
+  if (!existing) {
     throw httpError(401, 'Invalid or expired refresh token')
   }
 
-  // Rotate: delete old token. Two concurrent refreshes with the same token
-  // can both pass the findUnique check above before either commits (TOCTOU
-  // race) — one delete wins, the other's row is already gone and Prisma
-  // throws P2025 instead of silently no-oping. Without this catch that
-  // propagates as an uncaught error and surfaces as a 500 instead of the
-  // documented 401 (found via adversarial concurrent-request test).
-  try {
-    await prisma.refreshToken.delete({ where: { token } })
-  } catch (err: unknown) {
-    const e = err as { code?: string }
-    if (e.code === 'P2025') {
-      throw httpError(401, 'Invalid or expired refresh token')
-    }
-    throw err
+  if (existing.revokedAt) {
+    // This exact token was already rotated out by a *previous* request
+    // before this one even read it. A well-behaved single client never
+    // presents a non-current refresh token, so treat this as a possible
+    // theft signal: revoke the entire session family (every RefreshToken
+    // row for this user), not just this one token. This is intentionally
+    // different from the concurrent-race case below, where two requests
+    // both observe revokedAt: null and only one wins the atomic claim —
+    // that's an honest double-fire, not evidence of theft, so it must not
+    // cascade.
+    await prisma.refreshToken.deleteMany({
+      where: { userId: existing.userId },
+    })
+    throw httpError(401, 'Invalid or expired refresh token')
   }
 
-  // Issue new pair
+  if (existing.expiresAt < new Date()) {
+    throw httpError(401, 'Invalid or expired refresh token')
+  }
+
+  // Atomically claim this token for rotation. Two concurrent requests can
+  // both pass the checks above seeing revokedAt: null before either commits
+  // — only one of them can win this conditional update (Postgres serializes
+  // concurrent UPDATEs to the same row), so `claimed.count` distinguishes
+  // the winner from the loser without a separate lock.
+  const claimed = await prisma.refreshToken.updateMany({
+    where: { token, revokedAt: null },
+    data: { revokedAt: new Date() },
+  })
+
+  if (claimed.count === 0) {
+    // Lost the race to a concurrent request that rotated this exact token a
+    // moment ago. NOT the same as the revokedAt-already-set case above —
+    // both requests read revokedAt: null, so this is an honest simultaneous
+    // double-fire, not evidence of theft. Do not cascade-revoke; that would
+    // also kill the race's winner's brand-new session.
+    throw httpError(401, 'Invalid or expired refresh token')
+  }
+
+  // This request won — proceed exactly as before: issue a new access+refresh
+  // token pair. The old row is kept (now revoked, not deleted) so a later
+  // replay of it can still be detected by the check above.
   return issueTokens(prisma, existing.user)
 }
 
@@ -165,6 +206,10 @@ export async function logoutUser(
   prisma: PrismaClient,
   token: string
 ): Promise<void> {
+  // Logout is an intentional, single-token action, not a rotation — a plain
+  // delete (rather than the revokedAt-and-keep approach refreshTokens now
+  // uses) is fine here, since there's no later "was this replayed" check
+  // that needs the row to still exist.
   await prisma.refreshToken.delete({ where: { token } }).catch(() => {
     // Silently ignore if token not found
   })

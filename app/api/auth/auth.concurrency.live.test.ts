@@ -168,9 +168,13 @@ describe.runIf(
     const [a, b] = await Promise.all([fire(), fire()])
     const statuses = [a.status, b.status].sort()
 
-    // Regression assertion: this used to be [200, 500] before the P2025
-    // catch was added to refreshTokens(). Reuse under a genuine race must
-    // still land on the documented 401 for the loser, never a 500.
+    // Regression assertion: this used to be [200, 500] before a P2025 catch
+    // was added around refreshTokens()'s (then delete-based) rotation.
+    // refreshTokens() has since moved to an atomic `updateMany({where:
+    // {token, revokedAt: null}, ...})` claim (see the reuse-detection/
+    // session-family-revocation fix) which never throws for a losing race —
+    // it just reports `count: 0` — so there's no catch to regress anymore,
+    // but the loser must still land on the same documented 401, never a 500.
     expect(statuses).toEqual([200, 401])
 
     const winner = a.status === 200 ? a : b
@@ -182,15 +186,20 @@ describe.runIf(
     expect(loserBody.error.code).toBe('UNAUTHORIZED')
 
     // Confirms this is genuine single-winner rotation, not "both callers
-    // get a valid-but-different token pair" — the original token is gone,
-    // and only the winner's newly-issued token is a live row.
+    // get a valid-but-different token pair" — the original token's row is
+    // now revoked (kept, not deleted — see the reuse-detection fix in
+    // auth.service.ts's refreshTokens, which needs the row to persist so a
+    // later replay of it can still be detected), and only the winner's
+    // newly-issued token is a live, unrevoked row.
     const oldRow = await prisma.refreshToken.findUnique({
       where: { token: refreshToken },
     })
-    expect(oldRow).toBeNull()
+    expect(oldRow).not.toBeNull()
+    expect(oldRow?.revokedAt).not.toBeNull()
     const newRow = await prisma.refreshToken.findUnique({
       where: { token: winnerBody.refreshToken },
     })
     expect(newRow).not.toBeNull()
+    expect(newRow?.revokedAt).toBeNull()
   }, 20_000)
 })

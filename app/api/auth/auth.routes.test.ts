@@ -25,6 +25,8 @@ vi.mock('@/lib/server/prisma', () => ({
       create: vi.fn(),
       findUnique: vi.fn(),
       delete: vi.fn(),
+      deleteMany: vi.fn(),
+      updateMany: vi.fn(),
     },
     category: {
       createMany: vi.fn(),
@@ -90,6 +92,17 @@ describe('auth routes', () => {
     } as never)
     vi.mocked(prisma.category.createMany).mockResolvedValue({
       count: 18,
+    } as never)
+    // refreshTokens()'s opportunistic cleanup (deleteMany) and atomic-claim
+    // (updateMany) calls run on every call — default to "nothing stale to
+    // clean up" / "won the claim" so tests that don't care about these
+    // mechanics don't need to mock them individually. Tests that DO care
+    // (rotation, reuse) override these per-test below.
+    vi.mocked(prisma.refreshToken.deleteMany).mockResolvedValue({
+      count: 0,
+    } as never)
+    vi.mocked(prisma.refreshToken.updateMany).mockResolvedValue({
+      count: 1,
     } as never)
   })
 
@@ -263,10 +276,22 @@ describe('auth routes', () => {
           token: 'old-token',
           userId: 'user_1',
           expiresAt: new Date(Date.now() + 1000 * 60 * 60),
+          revokedAt: null,
           user,
         } as never)
-        .mockResolvedValueOnce(null)
-      vi.mocked(prisma.refreshToken.delete).mockResolvedValue({} as never)
+        // Real-DB behavior post-rotation: the row is kept, now with
+        // revokedAt set (see the reuse-detection fix in auth.service.ts) —
+        // no longer deleted outright.
+        .mockResolvedValueOnce({
+          token: 'old-token',
+          userId: 'user_1',
+          expiresAt: new Date(Date.now() + 1000 * 60 * 60),
+          revokedAt: new Date(),
+          user,
+        } as never)
+      vi.mocked(prisma.refreshToken.updateMany).mockResolvedValue({
+        count: 1,
+      } as never)
       vi.mocked(prisma.refreshToken.create).mockResolvedValue({} as never)
 
       const first = await refresh(
@@ -284,6 +309,11 @@ describe('auth routes', () => {
         })
       )
       expect(second.status).toBe(401)
+      // Reuse of the already-rotated token also cascades: the whole
+      // session family (this user's rows) is revoked, per Fix 1.
+      expect(prisma.refreshToken.deleteMany).toHaveBeenCalledWith({
+        where: { userId: 'user_1' },
+      })
     })
   })
 

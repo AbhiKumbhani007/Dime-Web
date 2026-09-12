@@ -22,14 +22,26 @@ are subject to the global rate limit, same as every other module — `dime-api`'
 rate limiter once, globally, with no per-route exemption for auth. Access tokens are signed with `jose`
 (HS256, 15-minute TTL, `{userId,email}` payload) using the same `JWT_ACCESS_SECRET` value `dime-api` uses,
 so a token issued by either system verifies against both during the transition. Refresh tokens are opaque
-`crypto.randomUUID()` values stored in `RefreshToken` with a 30-day expiry, rotated (old token deleted) on
-every `/api/auth/refresh` call.
+`crypto.randomUUID()` values stored in `RefreshToken` with a 30-day expiry, rotated on every
+`/api/auth/refresh` call — rotation now marks the old row `revokedAt` rather than deleting it (see the
+Reuse detection note below), and it's opportunistically purged ~24h later.
+
+**Reuse detection / session-family revocation (security hardening added after the initial port).**
+Presenting a refresh token whose row already has `revokedAt` set (i.e. it was already rotated out by an
+earlier call) is treated as a possible stolen-token replay: the ENTIRE session family — every `RefreshToken`
+row for that user — is revoked (deleted), and the request gets the same `401`. This is intentionally
+narrower than it sounds: two requests that both race to rotate the *same still-current* token (an honest
+concurrent double-fire, e.g. a flaky client retry) do **not** trigger this cascade — only one wins an atomic
+claim and the loser gets a plain `401`, exactly as before; the cascade is reserved for a token that was
+*already* rotated by a distinct, earlier call. See `lib/server/auth/auth.service.ts`'s `refreshTokens` for
+the exact algorithm and `lib/server/auth/auth.refresh-reuse.security.test.ts` /
+`app/api/auth/auth.concurrency.live.test.ts` for the tests distinguishing the two cases.
 
 | Method | Path                    | Auth | Request body                     | Success                                          | Errors                                                                 |
 | ------ | ----------------------- | ---- | --------------------------------- | ------------------------------------------------- | ----------------------------------------------------------------------- |
 | POST   | `/api/auth/register`    | none | `{ email, password, name? }`      | `201 { accessToken, refreshToken, user }` (flat)  | `400` (validation), `409` (email already registered), `429`             |
 | POST   | `/api/auth/login`       | none | `{ email, password }`             | `200 { accessToken, refreshToken, user }` (flat)  | `400` (validation), `401` (invalid email/password), `429`               |
-| POST   | `/api/auth/refresh`     | none | `{ refreshToken }`                | `200 { accessToken, refreshToken }` (rotated)     | `400` (validation), `401` (invalid/expired/already-used token), `429`   |
+| POST   | `/api/auth/refresh`     | none | `{ refreshToken }`                | `200 { accessToken, refreshToken }` (rotated)     | `400` (validation), `401` (invalid/expired/already-used token — reuse of an already-rotated token additionally revokes the caller's whole session family, see above), `429` |
 | POST   | `/api/auth/logout`      | none | `{ refreshToken }`                | `204` (idempotent — no-ops if token not found)    | `400` (validation), `429`                                               |
 | GET    | `/api/auth/me`          | yes  | —                                  | `200 UserProfile` (flat)                          | `401`, `404` (token valid but the user row no longer exists), `429`     |
 | PATCH  | `/api/auth/me`          | yes  | `{ name?, theme? }`               | `200 UserProfile` (flat)                          | `401`, `429`                                                             |
